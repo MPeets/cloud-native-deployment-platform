@@ -30,7 +30,7 @@ resource "aws_security_group" "allow_http" {
 resource "aws_instance" "app" {
   ami           = "ami-0c1ac8a41498c1a9c"
   instance_type = var.instance_type
-  key_name      = "devops-key"
+  key_name      = var.key_name
 
   vpc_security_group_ids = [aws_security_group.allow_http.id]
 
