@@ -4,3 +4,6 @@ Dockerfile
 .dockerignore
 .git
 .gitignore
+.aws
+*.tfstate
+*.tfstate.backup
