@@ -56,7 +56,7 @@ resource "aws_instance" "app" {
 
     [Service]
     Restart=always
-    ExecStart=/usr/bin/docker run --rm --name devops-api -p 3000:3000 $${IMAGE}
+    ExecStart=/usr/bin/docker run --rm --name devops-api -p 3000:3000 mpeets/devops-api:latest
     ExecStop=/usr/bin/docker stop devops-api
 
     [Install]
