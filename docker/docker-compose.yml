@@ -16,3 +16,9 @@ services:
       POSTGRES_DB: cloud-native-deployment-platform
     ports:
       - "5432:5432"
+
+  worker:
+    build: ../worker
+    depends_on:
+      - api
+    command: ["node", "src/worker.js"]
