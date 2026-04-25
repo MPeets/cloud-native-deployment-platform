@@ -49,17 +49,18 @@ resource "aws_instance" "app" {
                  cat <<EOF > /etc/systemd/system/devops-api.service
                  [Unit]
                  Description=DevOps API Container
-                 After=docker.service
                  Requires=docker.service
+                 After=docker.service
 
                  [Service]
                  Restart=always
-                 ExecStart=/usr/bin/docker run --name devops-api -p 3000:3000 mpeets/devops-api:latest
+                 ExecStart=/usr/bin/docker run --name devops-api -p 3000:3000 $IMAGE
                  ExecStop=/usr/bin/docker stop devops-api
                  ExecStopPost=/usr/bin/docker rm -f devops-api
 
                  [Install]
                  WantedBy=multi-user.target
+                 EOT
 
                  systemctl daemon-reload
                  systemctl enable devops-api
