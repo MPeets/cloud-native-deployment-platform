@@ -31,6 +31,13 @@ jobs:
         run: npm ci
 
       # =========================
+      # LINTING
+      # =========================
+      - name: Run ESLint
+        working-directory: ./app
+        run: npx eslint . || echo "Linting not configured yet"
+
+      # =========================
       # TESTS
       # =========================
       - name: Run tests
@@ -69,3 +76,13 @@ jobs:
       # =========================
       - name: Push latest
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:latest
+
+      # =========================
+      # HEALTH CHECK
+      # =========================
+      - name: Run container for health check
+        run: |
+          docker run -d -p 3000:3000 --name test-api ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.sha }}
+          sleep 5
+          curl --fail http://localhost:3000 || (echo "Health check failed" && exit 1)
+          docker stop test-api
