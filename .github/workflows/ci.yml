@@ -10,38 +10,62 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
+      # =========================
+      # CACHE
+      # =========================
       - name: Cache Node modules
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.npm
           key: ${{ runner.os }}-node-${{ hashFiles('app/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-npm-
 
+      # =========================
+      # INSTALL
+      # =========================
       - name: Install dependencies
         working-directory: ./app
         run: npm ci
 
+      # =========================
+      # TESTS
+      # =========================
       - name: Run tests
         working-directory: ./app
         run: echo "No tests yet"
 
+      # =========================
+      # DOCKER
+      # =========================
       - name: Log in to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # =========================
+      # BUILD DOCKER IMAGE
+      # =========================
       - name: Build Docker image
         run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.sha }} ./app
 
+      # =========================
+      # PUSH DOCKER IMAGE
+      # =========================
       - name: Push Docker image
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.sha }}
 
+      # =========================
+      # TAG LATEST
+      # =========================
       - name: Tag latest
         run: docker tag ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:latest
 
+      # =========================
+      # PUSH LATEST
+      # =========================
       - name: Push latest
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:latest
