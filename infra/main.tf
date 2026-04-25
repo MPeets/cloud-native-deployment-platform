@@ -34,38 +34,39 @@ resource "aws_instance" "app" {
 
   vpc_security_group_ids = [aws_security_group.allow_http.id]
 
-    user_data = <<-EOF
-                 #!/bin/bash
-                 set -e
+  user_data = <<-USERDATA
+    #!/bin/bash
+    set -e
 
-                 apt update -y
-                 apt install -y docker.io
+    apt-get update -y
+    apt-get install -y docker.io
 
-                 systemctl enable docker
-                 systemctl start docker
+    systemctl enable docker
+    systemctl start docker
 
-                 usermod -aG docker ubuntu || true
-                 
-                 cat <<EOF > /etc/systemd/system/devops-api.service
-                 [Unit]
-                 Description=DevOps API Container
-                 Requires=docker.service
-                 After=docker.service
+    usermod -aG docker ubuntu || true
 
-                 [Service]
-                 Restart=always
-                 ExecStart=/usr/bin/docker run --name devops-api -p 3000:3000 $IMAGE
-                 ExecStop=/usr/bin/docker stop devops-api
-                 ExecStopPost=/usr/bin/docker rm -f devops-api
+    IMAGE="mpeets/devops-api:latest"
 
-                 [Install]
-                 WantedBy=multi-user.target
-                 EOT
+    cat > /etc/systemd/system/devops-api.service <<UNIT
+    [Unit]
+    Description=DevOps API Container
+    Requires=docker.service
+    After=docker.service
 
-                 systemctl daemon-reload
-                 systemctl enable devops-api
-                 systemctl start devops-api
-                 EOF
+    [Service]
+    Restart=always
+    ExecStart=/usr/bin/docker run --rm --name devops-api -p 3000:3000 ${IMAGE}
+    ExecStop=/usr/bin/docker stop devops-api
+
+    [Install]
+    WantedBy=multi-user.target
+    UNIT
+
+    systemctl daemon-reload
+    systemctl enable devops-api
+    systemctl start devops-api
+  USERDATA
 
   tags = {
     Name = "devops-api-instance"
