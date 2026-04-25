@@ -28,7 +28,7 @@ resource "aws_security_group" "allow_http" {
 }
 
 resource "aws_instance" "app" {
-  ami           = "ami-0c1ac8a41498c1a9c"
+  ami           = var.ami_id
   instance_type = var.instance_type
   key_name      = var.key_name
 
@@ -42,8 +42,8 @@ resource "aws_instance" "app" {
               systemctl enable docker
               usermod -aG docker ubuntu
 
-              docker pull var.docker_image
-              docker run -d -p 3000:3000 mpeets/devops-api:latest
+              docker pull ${var.docker_image}
+              docker run -d -p 3000:3000 ${var.docker_image}
               EOF
 
   tags = {

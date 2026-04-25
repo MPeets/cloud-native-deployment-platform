@@ -16,3 +16,7 @@ variable "key_name" {
   type    = string
   default = "devops-key"  
 }
+
+variable "ami_id" {
+  type = string
+}
