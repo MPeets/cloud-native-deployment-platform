@@ -45,24 +45,25 @@ resource "aws_instance" "app" {
                  systemctl start docker
 
                  usermod -aG docker ubuntu || true
+                 
+                 cat <<EOF > /etc/systemd/system/devops-api.service
+                 [Unit]
+                 Description=DevOps API Container
+                 After=docker.service
+                 Requires=docker.service
 
-                 IMAGE="${var.docker_image}"
+                 [Service]
+                 Restart=always
+                 ExecStart=/usr/bin/docker run --name devops-api -p 3000:3000 mpeets/devops-api:latest
+                 ExecStop=/usr/bin/docker stop devops-api
+                 ExecStopPost=/usr/bin/docker rm -f devops-api
 
-                 # wait for Docker to be fully ready
-                 sleep 10
+                 [Install]
+                 WantedBy=multi-user.target
 
-                 # remove old container if exists
-                 docker rm -f devops-api || true
-
-                 docker pull $IMAGE
-
-                 docker run -d \
-                   --name devops-api \
-                   --restart unless-stopped \
-                   -p 3000:3000 \
-                   $IMAGE
-
-                echo "Container started at $(date)" >> /var/log/devops-api.log
+                 systemctl daemon-reload
+                 systemctl enable devops-api
+                 systemctl start devops-api
                  EOF
 
   tags = {
