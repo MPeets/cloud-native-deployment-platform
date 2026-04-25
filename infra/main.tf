@@ -34,17 +34,36 @@ resource "aws_instance" "app" {
 
   vpc_security_group_ids = [aws_security_group.allow_http.id]
 
-  user_data = <<-EOF
-              #!/bin/bash
-              apt update -y
-              apt install -y docker.io
-              systemctl start docker
-              systemctl enable docker
-              usermod -aG docker ubuntu
+    user_data = <<-EOF
+                 #!/bin/bash
+                 set -e
 
-              docker pull ${var.docker_image}
-              docker run -d -p 3000:3000 ${var.docker_image}
-              EOF
+                 apt update -y
+                 apt install -y docker.io
+
+                 systemctl enable docker
+                 systemctl start docker
+
+                 usermod -aG docker ubuntu || true
+
+                 IMAGE="${var.docker_image}"
+
+                 # wait for Docker to be fully ready
+                 sleep 10
+
+                 # remove old container if exists
+                 docker rm -f devops-api || true
+
+                 docker pull $IMAGE
+
+                 docker run -d \
+                   --name devops-api \
+                   --restart unless-stopped \
+                   -p 3000:3000 \
+                   $IMAGE
+
+                echo "Container started at $(date)" >> /var/log/devops-api.log
+                 EOF
 
   tags = {
     Name = "devops-api-instance"
