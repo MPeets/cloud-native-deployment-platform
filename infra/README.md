@@ -2,8 +2,8 @@
 
 This folder contains both:
 
-- `backend-bootstrap.tf`: creates the S3 bucket and DynamoDB table used by Terraform remote state.
-- `backend.tf`: configures Terraform to use that S3 backend and DynamoDB lock table.
+- `backend-bootstrap.tf`: creates the S3 bucket used by Terraform remote state.
+- `backend.tf`: configures Terraform to use that S3 backend (with S3 lockfile locking).
 
 Because these live in the same root module, first-time setup requires a one-time bootstrap flow.
 
