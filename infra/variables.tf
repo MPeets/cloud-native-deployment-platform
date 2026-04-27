@@ -49,3 +49,13 @@ variable "ecs_health_check_grace_period_seconds" {
   type    = number
   default = 60
 }
+
+variable "ecs_task_cpu" {
+  type    = number
+  default = 256
+}
+
+variable "ecs_task_memory" {
+  type    = number
+  default = 512
+}
