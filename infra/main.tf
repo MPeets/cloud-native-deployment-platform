@@ -46,7 +46,7 @@ resource "aws_instance" "app" {
 
     usermod -aG docker ubuntu || true
 
-    IMAGE="mpeets/devops-api:latest"
+    IMAGE="${var.docker_image}"
 
     cat > /etc/systemd/system/devops-api.service <<UNIT
     [Unit]
@@ -56,7 +56,7 @@ resource "aws_instance" "app" {
 
     [Service]
     Restart=always
-    ExecStart=/usr/bin/docker run --rm --name devops-api -p 3000:3000 mpeets/devops-api:latest
+    ExecStart=/usr/bin/docker run --rm --name devops-api -p 3000:3000 $IMAGE
     ExecStop=/usr/bin/docker stop devops-api
 
     [Install]
