@@ -20,6 +20,7 @@ Then edit `terraform.tfvars` and set:
 - `ssh_allowed_cidrs` to your public IPv4 `/32`
 - `enable_ecs = true` for the ECS/Fargate runtime
 - `enable_ec2 = false` unless you need the legacy EC2 Docker/systemd runtime for debugging
+- `ecs_assign_public_ip = true` when using default public subnets without NAT or private VPC endpoints
 
 ## First-Time Bootstrap (No Existing Backend Bucket)
 
@@ -71,7 +72,8 @@ The legacy EC2 Docker/systemd runtime is disabled by default. To enable it for d
 This stage fronts ECS tasks with an Application Load Balancer:
 
 - Public traffic enters via ALB (HTTP port 80).
-- ECS tasks are in private task networking (`assign_public_ip = false`).
+- ECS tasks use public IP assignment by default so they can pull images and write logs from the default public subnets.
+- To run tasks without public IPs, set `ecs_assign_public_ip = false` and provide NAT or private VPC endpoints for ECR and CloudWatch Logs.
 - Task security group allows app traffic only from the ALB security group.
 - Service endpoint is available in Terraform output `alb_dns_name`.
 - ALB health-check path is configurable via `alb_health_check_path` (default `/`).
