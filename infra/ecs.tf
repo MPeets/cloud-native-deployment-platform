@@ -16,8 +16,29 @@ resource "aws_security_group" "ecs_service" {
   vpc_id = data.aws_vpc.default.id
 
   ingress {
-    from_port   = var.app_port
-    to_port     = var.app_port
+    from_port       = var.app_port
+    to_port         = var.app_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb[0].id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "alb" {
+  count = var.enable_ecs ? 1 : 0
+
+  name   = "devops-api-alb"
+  vpc_id = data.aws_vpc.default.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -27,6 +48,48 @@ resource "aws_security_group" "ecs_service" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_lb" "app" {
+  count = var.enable_ecs ? 1 : 0
+
+  name               = "devops-api-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb[0].id]
+  subnets            = data.aws_subnets.default.ids
+}
+
+resource "aws_lb_target_group" "app" {
+  count = var.enable_ecs ? 1 : 0
+
+  name        = "devops-api-tg"
+  port        = var.app_port
+  protocol    = "HTTP"
+  vpc_id      = data.aws_vpc.default.id
+  target_type = "ip"
+
+  health_check {
+    path                = "/"
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 15
+    matcher             = "200-399"
+  }
+}
+
+resource "aws_lb_listener" "http" {
+  count = var.enable_ecs ? 1 : 0
+
+  load_balancer_arn = aws_lb.app[0].arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app[0].arn
   }
 }
 
@@ -115,6 +178,14 @@ resource "aws_ecs_service" "app" {
   network_configuration {
     subnets          = data.aws_subnets.default.ids
     security_groups  = [aws_security_group.ecs_service[0].id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app[0].arn
+    container_name   = "devops-api"
+    container_port   = var.app_port
+  }
+
+  depends_on = [aws_lb_listener.http[0]]
 }

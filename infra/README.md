@@ -65,7 +65,12 @@ This stack contains an ECS Fargate baseline (cluster + task definition + service
 
 To enable ECS resources, set `enable_ecs = true` in your local `terraform.tfvars`.
 
-Note: at this stage the service is assigned a public IP and the security group allows inbound traffic to `app_port` from the internet. A follow-up improvement is to front the service with an Application Load Balancer and restrict task networking.
+This stage fronts ECS tasks with an Application Load Balancer:
+
+- Public traffic enters via ALB (HTTP port 80).
+- ECS tasks are in private task networking (`assign_public_ip = false`).
+- Task security group allows app traffic only from the ALB security group.
+- Service endpoint is available in Terraform output `alb_dns_name`.
 
 ## Notes
 
