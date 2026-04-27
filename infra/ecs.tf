@@ -169,11 +169,14 @@ resource "aws_ecs_task_definition" "app" {
 resource "aws_ecs_service" "app" {
   count = var.enable_ecs ? 1 : 0
 
-  name            = "devops-api"
-  cluster         = aws_ecs_cluster.app[0].id
-  task_definition = aws_ecs_task_definition.app[0].arn
-  desired_count   = var.ecs_desired_count
-  launch_type     = "FARGATE"
+  name                               = "devops-api"
+  cluster                            = aws_ecs_cluster.app[0].id
+  task_definition                    = aws_ecs_task_definition.app[0].arn
+  desired_count                      = var.ecs_desired_count
+  launch_type                        = "FARGATE"
+  health_check_grace_period_seconds  = var.ecs_health_check_grace_period_seconds
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
 
   network_configuration {
     subnets          = data.aws_subnets.default.ids

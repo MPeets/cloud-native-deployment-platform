@@ -72,6 +72,10 @@ This stage fronts ECS tasks with an Application Load Balancer:
 - Task security group allows app traffic only from the ALB security group.
 - Service endpoint is available in Terraform output `alb_dns_name`.
 - ALB health-check path is configurable via `alb_health_check_path` (default `/`).
+- ECS deployment health tuning:
+  - `deployment_minimum_healthy_percent = 100`
+  - `deployment_maximum_percent = 200`
+  - `ecs_health_check_grace_period_seconds` (default `60`)
 
 ## Notes
 

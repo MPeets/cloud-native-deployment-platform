@@ -44,3 +44,8 @@ variable "alb_health_check_path" {
   type    = string
   default = "/"
 }
+
+variable "ecs_health_check_grace_period_seconds" {
+  type    = number
+  default = 60
+}
