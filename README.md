@@ -3,7 +3,7 @@ End-to-end CI/CD pipeline with Docker, AWS, and Terraform
 
 ## Infrastructure setup
 
-Terraform backend bootstrapping and state migration steps are documented in `infra/README.md`.
+Terraform backend bootstrapping now lives in `infra/bootstrap`; setup and state migration steps are documented in `infra/README.md`.
 
 ## Runtime architecture
 
