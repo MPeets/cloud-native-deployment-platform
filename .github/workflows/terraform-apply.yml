@@ -37,7 +37,7 @@ jobs:
           name: terraform-plan-${{ github.event.workflow_run.head_sha }}
           path: infra
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
 
       - name: Terraform Apply
         run: terraform apply tfplan

@@ -6,3 +6,6 @@ node_modules
 *.tfstate.*
 *.tfplan
 crash.log
+
+# Local Terraform variable overrides (contains personal IPs, etc.)
+infra/terraform.tfvars

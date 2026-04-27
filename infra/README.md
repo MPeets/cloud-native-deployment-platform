@@ -7,6 +7,16 @@ This folder contains both:
 
 Because these live in the same root module, first-time setup requires a one-time bootstrap flow.
 
+## Local config (`terraform.tfvars`)
+
+This repo includes `terraform.tfvars.example` as a template. Create your local `terraform.tfvars` from it (do not commit it; it can contain personal IPs).
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Then edit `terraform.tfvars` and set `ssh_allowed_cidrs` to your public IPv4 `/32`.
+
 ## First-Time Bootstrap (No Existing Remote State)
 
 1. Temporarily disable the S3 backend config by renaming `backend.tf`:

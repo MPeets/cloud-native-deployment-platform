@@ -13,6 +13,10 @@ on:
 jobs:
   plan:
     runs-on: ubuntu-latest
+    env:
+      TF_VAR_ami_id: ${{ vars.TF_AMI_ID }}
+      TF_VAR_docker_image: ${{ vars.TF_DOCKER_IMAGE }}
+      TF_VAR_ssh_allowed_cidrs: ${{ secrets.TF_SSH_ALLOWED_CIDRS }}
 
     defaults:
       run:

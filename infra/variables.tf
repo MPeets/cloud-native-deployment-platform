@@ -20,3 +20,7 @@ variable "key_name" {
 variable "ami_id" {
   type = string
 }
+
+variable "ssh_allowed_cidrs" {
+  type = list(string)
+}
