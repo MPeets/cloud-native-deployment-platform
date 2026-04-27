@@ -9,12 +9,12 @@ variable "instance_type" {
 }
 
 variable "docker_image" {
-  type    = string
+  type = string
 }
 
 variable "key_name" {
   type    = string
-  default = "devops-key"  
+  default = "devops-key"
 }
 
 variable "ami_id" {
