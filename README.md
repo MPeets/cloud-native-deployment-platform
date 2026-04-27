@@ -7,7 +7,16 @@ Terraform backend bootstrapping and state migration steps are documented in `inf
 
 ## Runtime architecture
 
-This project includes an ECS Fargate baseline (containers-as-primitives) in addition to the original single-EC2 Docker/systemd path.
+The primary runtime is **ECS Fargate** behind an **Application Load Balancer**. Terraform provisions the ECS cluster, task definition, service, ALB, target group, security groups, IAM execution role, and CloudWatch logging.
+
+The original single-EC2 Docker/systemd deployment is kept only as an optional legacy/debug runtime and is disabled by default (`TF_ENABLE_EC2=false`). ECS/Fargate is enabled by default (`TF_ENABLE_ECS=true`) so the deployed path uses managed container orchestration instead of a single VM.
+
+High-level flow:
+
+- CI builds and pushes the Docker image.
+- Terraform deploys the image as an ECS Fargate task/service.
+- The ALB exposes HTTP traffic to the service.
+- CloudWatch captures container logs.
 
 ## CI AWS authentication (OIDC)
 
