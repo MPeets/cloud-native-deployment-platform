@@ -15,7 +15,11 @@ This repo includes `terraform.tfvars.example` as a template. Create your local `
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Then edit `terraform.tfvars` and set `ssh_allowed_cidrs` to your public IPv4 `/32`.
+Then edit `terraform.tfvars` and set:
+
+- `ssh_allowed_cidrs` to your public IPv4 `/32`
+- `enable_ecs = true` for the ECS/Fargate runtime
+- `enable_ec2 = false` unless you need the legacy EC2 Docker/systemd runtime for debugging
 
 ## First-Time Bootstrap (No Existing Remote State)
 
