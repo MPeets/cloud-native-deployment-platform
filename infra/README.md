@@ -71,6 +71,7 @@ This stage fronts ECS tasks with an Application Load Balancer:
 - ECS tasks are in private task networking (`assign_public_ip = false`).
 - Task security group allows app traffic only from the ALB security group.
 - Service endpoint is available in Terraform output `alb_dns_name`.
+- ALB health-check path is configurable via `alb_health_check_path` (default `/`).
 
 ## Notes
 

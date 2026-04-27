@@ -39,3 +39,8 @@ variable "ecs_desired_count" {
   type    = number
   default = 1
 }
+
+variable "alb_health_check_path" {
+  type    = string
+  default = "/"
+}

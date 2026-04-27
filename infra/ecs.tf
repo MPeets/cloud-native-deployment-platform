@@ -71,7 +71,7 @@ resource "aws_lb_target_group" "app" {
   target_type = "ip"
 
   health_check {
-    path                = "/"
+    path                = var.alb_health_check_path
     healthy_threshold   = 2
     unhealthy_threshold = 2
     timeout             = 5
