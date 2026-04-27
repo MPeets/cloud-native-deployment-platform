@@ -103,7 +103,7 @@ resource "aws_cloudwatch_log_group" "ecs" {
   count = var.enable_ecs ? 1 : 0
 
   name              = "/ecs/devops-api"
-  retention_in_days = 7
+  retention_in_days = var.ecs_log_retention_days
 }
 
 resource "aws_iam_role" "ecs_task_execution" {

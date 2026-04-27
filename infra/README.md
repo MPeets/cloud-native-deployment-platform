@@ -77,6 +77,7 @@ This stage fronts ECS tasks with an Application Load Balancer:
   - `deployment_maximum_percent = 200`
   - `ecs_health_check_grace_period_seconds` (default `60`)
 - ECS task size is configurable via `ecs_task_cpu` (default `256`) and `ecs_task_memory` (default `512`).
+- ECS log retention is configurable via `ecs_log_retention_days` (default `7`).
 
 ## Notes
 

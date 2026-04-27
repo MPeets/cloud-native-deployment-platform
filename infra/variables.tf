@@ -59,3 +59,8 @@ variable "ecs_task_memory" {
   type    = number
   default = 512
 }
+
+variable "ecs_log_retention_days" {
+  type    = number
+  default = 7
+}
