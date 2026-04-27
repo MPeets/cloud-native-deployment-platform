@@ -3,6 +3,8 @@ provider "aws" {
 }
 
 resource "aws_security_group" "allow_http" {
+  count = var.enable_ec2 ? 1 : 0
+
   name = "allow_http"
 
   ingress {
@@ -28,11 +30,13 @@ resource "aws_security_group" "allow_http" {
 }
 
 resource "aws_instance" "app" {
+  count = var.enable_ec2 ? 1 : 0
+
   ami           = var.ami_id
   instance_type = var.instance_type
   key_name      = var.key_name
 
-  vpc_security_group_ids = [aws_security_group.allow_http.id]
+  vpc_security_group_ids = [aws_security_group.allow_http[0].id]
 
   user_data = <<-USERDATA
     #!/bin/bash

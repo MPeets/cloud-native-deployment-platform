@@ -64,6 +64,7 @@ terraform apply
 This stack contains an ECS Fargate baseline (cluster + task definition + service) running the `docker_image`.
 
 To enable ECS resources, set `enable_ecs = true` in your local `terraform.tfvars`.
+The legacy EC2 Docker/systemd runtime is disabled by default. To enable it for debugging, set `enable_ec2 = true`.
 
 This stage fronts ECS tasks with an Application Load Balancer:
 

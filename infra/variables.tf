@@ -30,6 +30,11 @@ variable "enable_ecs" {
   default = true
 }
 
+variable "enable_ec2" {
+  type    = bool
+  default = false
+}
+
 variable "app_port" {
   type    = number
   default = 3000

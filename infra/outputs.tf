@@ -1,5 +1,5 @@
 output "public_ip" {
-  value = aws_instance.app.public_ip
+  value = var.enable_ec2 ? aws_instance.app[0].public_ip : null
 }
 
 output "alb_dns_name" {
