@@ -5,6 +5,10 @@ End-to-end CI/CD pipeline with Docker, AWS, and Terraform
 
 Terraform backend bootstrapping and state migration steps are documented in `infra/README.md`.
 
+## Runtime architecture
+
+This project includes an ECS Fargate baseline (containers-as-primitives) in addition to the original single-EC2 Docker/systemd path.
+
 ## CI AWS authentication (OIDC)
 
 This project uses GitHub Actions OIDC to assume an AWS IAM role (no long-lived AWS keys in GitHub secrets).

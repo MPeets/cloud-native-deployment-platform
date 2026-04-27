@@ -59,6 +59,10 @@ terraform plan
 terraform apply
 ```
 
+## ECS Fargate (cloud-native runtime)
+
+This stack contains an ECS Fargate baseline (cluster + task definition) running the `docker_image`. A service/load balancer can be added as a follow-up.
+
 ## Notes
 
 - Run these commands from the `infra` directory.

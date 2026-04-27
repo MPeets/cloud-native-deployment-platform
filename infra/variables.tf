@@ -24,3 +24,13 @@ variable "ami_id" {
 variable "ssh_allowed_cidrs" {
   type = list(string)
 }
+
+variable "enable_ecs" {
+  type    = bool
+  default = false
+}
+
+variable "app_port" {
+  type    = number
+  default = 3000
+}
