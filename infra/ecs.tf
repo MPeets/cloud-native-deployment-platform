@@ -9,6 +9,27 @@ data "aws_subnets" "default" {
   }
 }
 
+resource "aws_security_group" "ecs_service" {
+  count = var.enable_ecs ? 1 : 0
+
+  name   = "devops-api-ecs-service"
+  vpc_id = data.aws_vpc.default.id
+
+  ingress {
+    from_port   = var.app_port
+    to_port     = var.app_port
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 resource "aws_ecs_cluster" "app" {
   count = var.enable_ecs ? 1 : 0
 
@@ -80,4 +101,20 @@ resource "aws_ecs_task_definition" "app" {
       }
     }
   ])
+}
+
+resource "aws_ecs_service" "app" {
+  count = var.enable_ecs ? 1 : 0
+
+  name            = "devops-api"
+  cluster         = aws_ecs_cluster.app[0].id
+  task_definition = aws_ecs_task_definition.app[0].arn
+  desired_count   = var.ecs_desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = data.aws_subnets.default.ids
+    security_groups  = [aws_security_group.ecs_service[0].id]
+    assign_public_ip = true
+  }
 }

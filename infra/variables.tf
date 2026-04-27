@@ -27,10 +27,15 @@ variable "ssh_allowed_cidrs" {
 
 variable "enable_ecs" {
   type    = bool
-  default = false
+  default = true
 }
 
 variable "app_port" {
   type    = number
   default = 3000
+}
+
+variable "ecs_desired_count" {
+  type    = number
+  default = 1
 }

@@ -61,7 +61,11 @@ terraform apply
 
 ## ECS Fargate (cloud-native runtime)
 
-This stack contains an ECS Fargate baseline (cluster + task definition) running the `docker_image`. A service/load balancer can be added as a follow-up.
+This stack contains an ECS Fargate baseline (cluster + task definition + service) running the `docker_image`.
+
+To enable ECS resources, set `enable_ecs = true` in your local `terraform.tfvars`.
+
+Note: at this stage the service is assigned a public IP and the security group allows inbound traffic to `app_port` from the internet. A follow-up improvement is to front the service with an Application Load Balancer and restrict task networking.
 
 ## Notes
 
