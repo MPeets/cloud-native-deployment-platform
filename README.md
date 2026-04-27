@@ -18,6 +18,8 @@ This project uses GitHub Actions OIDC to assume an AWS IAM role (no long-lived A
   - `TF_AWS_REGION`: AWS region (e.g. `eu-north-1`)
   - `TF_AMI_ID`: AMI id to deploy
   - `TF_DOCKER_IMAGE`: Docker image reference for EC2 to run
+  - `TF_ENABLE_ECS`: `true` for ECS/Fargate runtime
+  - `TF_ENABLE_EC2`: `false` unless enabling legacy EC2 for debugging
 - GitHub Actions **Secrets**:
   - `TF_SSH_ALLOWED_CIDRS`: JSON array string like `["203.0.113.10/32"]`
 
