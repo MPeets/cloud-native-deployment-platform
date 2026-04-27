@@ -1,11 +1,11 @@
 # Terraform Infrastructure
 
-This folder contains both:
+This folder contains two Terraform roots:
 
-- `backend-bootstrap.tf`: creates the S3 bucket used by Terraform remote state.
-- `backend.tf`: configures Terraform to use that S3 backend (with S3 lockfile locking).
+- `bootstrap/`: creates the S3 bucket used by Terraform remote state. This root uses local state and is only needed when the backend bucket does not exist yet.
+- `./`: deploys the application infrastructure and configures Terraform to use the S3 backend in `backend.tf` (with S3 lockfile locking).
 
-Because these live in the same root module, first-time setup requires a one-time bootstrap flow.
+Keeping backend bootstrap resources out of the main root avoids Terraform trying to manage the same bucket from the state stored in that bucket.
 
 ## Local config (`terraform.tfvars`)
 
@@ -20,41 +20,40 @@ Then edit `terraform.tfvars` and set:
 - `ssh_allowed_cidrs` to your public IPv4 `/32`
 - `enable_ecs = true` for the ECS/Fargate runtime
 - `enable_ec2 = false` unless you need the legacy EC2 Docker/systemd runtime for debugging
+- `ecs_assign_public_ip = true` when using default public subnets without NAT or private VPC endpoints
 
-## First-Time Bootstrap (No Existing Remote State)
+## First-Time Bootstrap (No Existing Backend Bucket)
 
-1. Temporarily disable the S3 backend config by renaming `backend.tf`:
-
-```bash
-mv backend.tf backend.tf.disabled
-```
-
-2. Initialize and apply with the default local backend:
+1. Create the remote state bucket from the bootstrap root:
 
 ```bash
+cd bootstrap
 terraform init
 terraform apply
 ```
 
-3. Re-enable the backend config:
+2. Return to the main infrastructure root:
 
 ```bash
-mv backend.tf.disabled backend.tf
+cd ..
+terraform init
 ```
 
-4. Re-initialize and migrate local state to S3:
+For a brand-new environment, you can now continue with `terraform plan` and `terraform apply`.
+
+If you already have local state from before enabling the S3 backend, migrate it instead:
 
 ```bash
 terraform init -migrate-state
 ```
 
-5. Verify state now points to the remote backend:
+3. Verify state now points to the remote backend:
 
 ```bash
 terraform state list
 ```
 
-## Normal Workflow (After Bootstrap)
+## Normal Workflow (After Backend Bootstrap)
 
 Once the backend is bootstrapped, use normal Terraform commands:
 
@@ -73,7 +72,8 @@ The legacy EC2 Docker/systemd runtime is disabled by default. To enable it for d
 This stage fronts ECS tasks with an Application Load Balancer:
 
 - Public traffic enters via ALB (HTTP port 80).
-- ECS tasks are in private task networking (`assign_public_ip = false`).
+- ECS tasks use public IP assignment by default so they can pull images and write logs from the default public subnets.
+- To run tasks without public IPs, set `ecs_assign_public_ip = false` and provide NAT or private VPC endpoints for ECR and CloudWatch Logs.
 - Task security group allows app traffic only from the ALB security group.
 - Service endpoint is available in Terraform output `alb_dns_name`.
 - ALB health-check path is configurable via `alb_health_check_path` (default `/`).
@@ -87,4 +87,5 @@ This stage fronts ECS tasks with an Application Load Balancer:
 ## Notes
 
 - Run these commands from the `infra` directory.
-- If backend resource names change in `backend-bootstrap.tf`, update `backend.tf` to match.
+- Run bootstrap commands from `infra/bootstrap`.
+- If the bootstrap `state_bucket_name` changes, update the bucket name in `backend.tf` to match.

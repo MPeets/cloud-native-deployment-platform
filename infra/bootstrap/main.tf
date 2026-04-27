@@ -1,5 +1,9 @@
+provider "aws" {
+  region = var.aws_region
+}
+
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "devops-terraform-state-mpeets"
+  bucket = var.state_bucket_name
 }
 
 resource "aws_s3_bucket_versioning" "versioning" {

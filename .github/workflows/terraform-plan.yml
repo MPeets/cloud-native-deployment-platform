@@ -46,10 +46,16 @@ jobs:
         run: terraform init
 
       - name: Terraform Format Check
-        run: terraform fmt -check
+        run: terraform fmt -check -recursive
 
       - name: Terraform Validate
         run: terraform validate
+
+      - name: Terraform Bootstrap Init
+        run: terraform -chdir=bootstrap init -backend=false
+
+      - name: Terraform Bootstrap Validate
+        run: terraform -chdir=bootstrap validate
 
       - name: Terraform Plan
         run: terraform plan -out=tfplan
