@@ -68,7 +68,7 @@ terraform apply
 This stack contains an ECS Fargate baseline (cluster + task definition + service) running the `docker_image`.
 
 To enable ECS resources, set `enable_ecs = true` in your local `terraform.tfvars`.
-The legacy EC2 Docker/systemd runtime is disabled by default. To enable it for debugging, set `enable_ec2 = true`.
+The legacy EC2 Docker/systemd runtime is disabled by default. To enable it for debugging, set `enable_ec2 = true`; it runs in a custom public subnet with a public IP.
 
 This stage fronts ECS tasks with an Application Load Balancer:
 
@@ -98,7 +98,7 @@ This stack now creates a small custom network foundation:
 - Single NAT gateway and private route table for private subnet outbound access.
 - VPC endpoints for ECR API, ECR Docker, CloudWatch Logs, and S3.
 
-ECS now uses the custom private subnets behind the public ALB. The legacy EC2 runtime still uses the default VPC path. For higher availability, a future iteration can add one NAT gateway per Availability Zone.
+ECS now uses the custom private subnets behind the public ALB. The legacy EC2 debug runtime uses the custom public subnet path. For higher availability, a future iteration can add one NAT gateway per Availability Zone.
 
 ## Notes
 

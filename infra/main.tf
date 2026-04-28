@@ -5,7 +5,8 @@ provider "aws" {
 resource "aws_security_group" "allow_http" {
   count = var.enable_ec2 ? 1 : 0
 
-  name = "allow_http"
+  name   = "allow_http"
+  vpc_id = aws_vpc.app.id
 
   ingress {
     from_port   = 3000
@@ -36,7 +37,9 @@ resource "aws_instance" "app" {
   instance_type = var.instance_type
   key_name      = var.key_name
 
-  vpc_security_group_ids = [aws_security_group.allow_http[0].id]
+  subnet_id                   = aws_subnet.public[local.nat_public_subnet_key].id
+  associate_public_ip_address = true
+  vpc_security_group_ids      = [aws_security_group.allow_http[0].id]
 
   user_data = <<-USERDATA
     #!/bin/bash
