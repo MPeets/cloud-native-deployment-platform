@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_destroy:
-        description: Type "destroy" to tear down the non-bootstrap infrastructure.
+        description: Select "destroy" to tear down the non-bootstrap infrastructure.
         required: true
         type: choice
         default: "no"
