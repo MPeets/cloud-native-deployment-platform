@@ -1,19 +1,8 @@
-data "aws_vpc" "default" {
-  default = true
-}
-
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-
 resource "aws_security_group" "ecs_service" {
   count = var.enable_ecs ? 1 : 0
 
   name   = "devops-api-ecs-service"
-  vpc_id = data.aws_vpc.default.id
+  vpc_id = aws_vpc.app.id
 
   ingress {
     from_port       = var.app_port
@@ -34,7 +23,7 @@ resource "aws_security_group" "alb" {
   count = var.enable_ecs ? 1 : 0
 
   name   = "devops-api-alb"
-  vpc_id = data.aws_vpc.default.id
+  vpc_id = aws_vpc.app.id
 
   ingress {
     from_port   = 80
@@ -58,7 +47,7 @@ resource "aws_lb" "app" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb[0].id]
-  subnets            = data.aws_subnets.default.ids
+  subnets            = values(aws_subnet.public)[*].id
 }
 
 resource "aws_lb_target_group" "app" {
@@ -67,7 +56,7 @@ resource "aws_lb_target_group" "app" {
   name        = "devops-api-tg"
   port        = var.app_port
   protocol    = "HTTP"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = aws_vpc.app.id
   target_type = "ip"
 
   health_check {
@@ -179,7 +168,7 @@ resource "aws_ecs_service" "app" {
   deployment_maximum_percent         = 200
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    subnets          = values(aws_subnet.public)[*].id
     security_groups  = [aws_security_group.ecs_service[0].id]
     assign_public_ip = var.ecs_assign_public_ip
   }
