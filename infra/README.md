@@ -21,6 +21,7 @@ Then edit `terraform.tfvars` and set:
 - `enable_ecs = true` for the ECS/Fargate runtime
 - `enable_ec2 = false` unless you need the legacy EC2 Docker/systemd runtime for debugging
 - `ecs_assign_public_ip = true` when using default public subnets without NAT or private VPC endpoints
+- `vpc_cidr`, `public_subnet_cidrs`, and `private_subnet_cidrs` if the default network ranges overlap with an existing environment
 
 ## First-Time Bootstrap (No Existing Backend Bucket)
 
@@ -83,6 +84,17 @@ This stage fronts ECS tasks with an Application Load Balancer:
   - `ecs_health_check_grace_period_seconds` (default `60`)
 - ECS task size is configurable via `ecs_task_cpu` (default `256`) and `ecs_task_memory` (default `512`).
 - ECS log retention is configurable via `ecs_log_retention_days` (default `7`).
+
+## Network baseline
+
+This stack now creates a small custom network foundation:
+
+- VPC with DNS support enabled.
+- Two public subnets across available Availability Zones.
+- Two private subnets across available Availability Zones.
+- Internet gateway and public route table for the public subnet tier.
+
+The ECS and legacy EC2 runtimes still use the default VPC path in this first step. The next networking iteration should move the ALB to the custom public subnets, move ECS tasks into private subnets, and add NAT or private VPC endpoints so private tasks can reach ECR and CloudWatch Logs.
 
 ## Notes
 
