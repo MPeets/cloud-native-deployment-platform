@@ -40,6 +40,85 @@ resource "aws_security_group" "alb" {
   }
 }
 
+resource "aws_security_group" "vpc_endpoints" {
+  count = var.enable_ecs ? 1 : 0
+
+  name   = "devops-api-vpc-endpoints"
+  vpc_id = aws_vpc.app.id
+
+  ingress {
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_service[0].id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_vpc_endpoint" "ecr_api" {
+  count = var.enable_ecs ? 1 : 0
+
+  vpc_id              = aws_vpc.app.id
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = values(aws_subnet.private)[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "devops-api-ecr-api-endpoint"
+  }
+}
+
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  count = var.enable_ecs ? 1 : 0
+
+  vpc_id              = aws_vpc.app.id
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = values(aws_subnet.private)[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "devops-api-ecr-dkr-endpoint"
+  }
+}
+
+resource "aws_vpc_endpoint" "logs" {
+  count = var.enable_ecs ? 1 : 0
+
+  vpc_id              = aws_vpc.app.id
+  service_name        = "com.amazonaws.${var.aws_region}.logs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = values(aws_subnet.private)[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "devops-api-logs-endpoint"
+  }
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  count = var.enable_ecs ? 1 : 0
+
+  vpc_id            = aws_vpc.app.id
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private.id]
+
+  tags = {
+    Name = "devops-api-s3-endpoint"
+  }
+}
+
 resource "aws_lb" "app" {
   count = var.enable_ecs ? 1 : 0
 

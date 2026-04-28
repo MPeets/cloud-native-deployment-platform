@@ -75,7 +75,8 @@ This stage fronts ECS tasks with an Application Load Balancer:
 - Public traffic enters via ALB (HTTP port 80).
 - The ALB runs in the custom public subnets.
 - ECS tasks run in the custom private subnets without public IPs.
-- Private ECS tasks use NAT egress to pull images and write logs to ECR and CloudWatch Logs.
+- Private ECS tasks use VPC endpoints for ECR, S3, and CloudWatch Logs traffic.
+- NAT egress remains available for other outbound internet access.
 - Task security group allows app traffic only from the ALB security group.
 - Service endpoint is available in Terraform output `alb_dns_name`.
 - ALB health-check path is configurable via `alb_health_check_path` (default `/`).
@@ -95,8 +96,9 @@ This stack now creates a small custom network foundation:
 - Two private subnets across available Availability Zones.
 - Internet gateway and public route table for the public subnet tier.
 - Single NAT gateway and private route table for private subnet outbound access.
+- VPC endpoints for ECR API, ECR Docker, CloudWatch Logs, and S3.
 
-ECS now uses the custom private subnets behind the public ALB. The legacy EC2 runtime still uses the default VPC path. For higher availability, a future iteration can add one NAT gateway per Availability Zone or replace NAT egress for AWS services with private VPC endpoints.
+ECS now uses the custom private subnets behind the public ALB. The legacy EC2 runtime still uses the default VPC path. For higher availability, a future iteration can add one NAT gateway per Availability Zone.
 
 ## Notes
 
