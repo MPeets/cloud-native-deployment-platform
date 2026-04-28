@@ -5,6 +5,7 @@ on:
     branches: ["main"]
     paths:
       - "app/**"
+      - "worker/**"
 
 jobs:
   build:
@@ -19,10 +20,16 @@ jobs:
         with:
           node-version: 18
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: |
+            app/package-lock.json
+            worker/package-lock.json
 
-      - name: Install dependencies
+      - name: Install app dependencies
         working-directory: ./app
+        run: npm ci
+
+      - name: Install worker dependencies
+        working-directory: ./worker
         run: npm ci
 
       - name: Run tests
