@@ -1,0 +1,61 @@
+name: Terraform Destroy
+
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: Type "destroy" to tear down the non-bootstrap infrastructure.
+        required: true
+        type: choice
+        default: "no"
+        options:
+          - "no"
+          - "destroy"
+
+concurrency:
+  group: terraform-state
+  cancel-in-progress: false
+
+jobs:
+  destroy:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_destroy == 'destroy'
+    runs-on: ubuntu-latest
+
+    environment: production
+    env:
+      TF_VAR_ami_id: ${{ vars.TF_AMI_ID }}
+      TF_VAR_docker_image: ${{ vars.TF_DOCKER_IMAGE }}
+      TF_VAR_ssh_allowed_cidrs: ${{ secrets.TF_SSH_ALLOWED_CIDRS }}
+      TF_VAR_aws_region: ${{ vars.TF_AWS_REGION }}
+      TF_VAR_enable_ecs: ${{ vars.TF_ENABLE_ECS }}
+      TF_VAR_enable_ec2: ${{ vars.TF_ENABLE_EC2 }}
+
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.TF_AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Destroy Plan
+        run: terraform plan -destroy -lock-timeout=10m -out=tfdestroy
+
+      - name: Terraform Destroy
+        run: terraform apply -lock-timeout=10m tfdestroy
