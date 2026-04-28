@@ -1,14 +1,25 @@
-const express = require('express');
-const app = express();
+const { createApp } = require('./app');
+const { createDeploymentsRepository } = require('./deploymentsRepository');
+const { initializeDatabase, isDatabaseReady, pool } = require('./db');
 
-app.get('/', (req, res) => {
-  res.send('API is running');
-});
+const port = process.env.PORT || 3000;
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
+async function startServer() {
+  const app = createApp({
+    deploymentsRepository: createDeploymentsRepository(pool),
+    isDatabaseReady,
+  });
 
-app.listen(3000, () => {
-  console.log('Server running on port 3000');
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
+
+  initializeDatabase().catch((error) => {
+    console.error('Database initialization failed', error);
+  });
+}
+
+startServer().catch((error) => {
+  console.error('Failed to start server', error);
+  process.exit(1);
 });
