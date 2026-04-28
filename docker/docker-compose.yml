@@ -5,6 +5,8 @@ services:
     build: ../app
     ports:
       - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/cloud-native-deployment-platform
     depends_on:
       - db
 
@@ -19,6 +21,7 @@ services:
 
   worker:
     build: ../worker
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/cloud-native-deployment-platform
     depends_on:
-      - api
-    command: ["node", "src/worker.js"]
+      - db

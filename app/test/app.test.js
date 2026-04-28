@@ -85,6 +85,30 @@ test('POST /deployments creates a pending deployment', async () => {
   assert.equal(response.body.deployed_at, baseDeployment.deployed_at);
 });
 
+test('POST /deployments calls the repository with a valid request body', async () => {
+  let createdDeployment;
+  const repository = {
+    async create(deployment) {
+      createdDeployment = deployment;
+      return { id: 1, ...baseDeployment, ...deployment };
+    },
+  };
+  const app = createApp({
+    deploymentsRepository: repository,
+    isDatabaseReady: async () => {},
+  });
+
+  await request(app)
+    .post('/deployments')
+    .send({ service: ' payments-api ', version: ' 1.4.2 ' })
+    .expect(201);
+
+  assert.deepEqual(createdDeployment, {
+    service: 'payments-api',
+    version: '1.4.2',
+  });
+});
+
 test('POST /deployments validates required fields', async () => {
   const app = createTestApp();
 
