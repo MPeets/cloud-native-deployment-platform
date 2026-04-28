@@ -10,6 +10,10 @@ on:
     workflows: ["Terraform Plan"]
     types: [completed]
 
+concurrency:
+  group: terraform-state
+  cancel-in-progress: false
+
 jobs:
   apply:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
@@ -55,4 +59,4 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Terraform Apply
-        run: terraform apply tfplan
+        run: terraform apply -lock-timeout=10m tfplan

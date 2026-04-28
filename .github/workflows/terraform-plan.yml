@@ -14,6 +14,10 @@ on:
     paths:
       - "infra/**"
 
+concurrency:
+  group: terraform-state
+  cancel-in-progress: false
+
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -58,7 +62,7 @@ jobs:
         run: terraform -chdir=bootstrap validate
 
       - name: Terraform Plan
-        run: terraform plan -out=tfplan
+        run: terraform plan -lock-timeout=10m -out=tfplan
 
       - name: Upload Terraform Plan Artifact
         if: github.event_name == 'push'
