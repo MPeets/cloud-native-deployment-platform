@@ -20,7 +20,7 @@ Then edit `terraform.tfvars` and set:
 - `ssh_allowed_cidrs` to your public IPv4 `/32`
 - `enable_ecs = true` for the ECS/Fargate runtime
 - `enable_ec2 = false` unless you need the legacy EC2 Docker/systemd runtime for debugging
-- `ecs_assign_public_ip = true` while ECS tasks run in public subnets without NAT or private VPC endpoints
+- `ecs_assign_public_ip = false` so ECS tasks run without public IPs in private subnets
 - `vpc_cidr`, `public_subnet_cidrs`, and `private_subnet_cidrs` if the default network ranges overlap with an existing environment
 
 ## First-Time Bootstrap (No Existing Backend Bucket)
@@ -73,9 +73,9 @@ The legacy EC2 Docker/systemd runtime is disabled by default. To enable it for d
 This stage fronts ECS tasks with an Application Load Balancer:
 
 - Public traffic enters via ALB (HTTP port 80).
-- The ALB and ECS tasks run in the custom public subnets.
-- ECS tasks use public IP assignment by default so they can pull images and write logs without NAT or private VPC endpoints.
-- To run tasks without public IPs, set `ecs_assign_public_ip = false` and provide NAT or private VPC endpoints for ECR and CloudWatch Logs.
+- The ALB runs in the custom public subnets.
+- ECS tasks run in the custom private subnets without public IPs.
+- Private ECS tasks use NAT egress to pull images and write logs to ECR and CloudWatch Logs.
 - Task security group allows app traffic only from the ALB security group.
 - Service endpoint is available in Terraform output `alb_dns_name`.
 - ALB health-check path is configurable via `alb_health_check_path` (default `/`).
@@ -94,8 +94,9 @@ This stack now creates a small custom network foundation:
 - Two public subnets across available Availability Zones.
 - Two private subnets across available Availability Zones.
 - Internet gateway and public route table for the public subnet tier.
+- Single NAT gateway and private route table for private subnet outbound access.
 
-ECS now uses the custom public subnets. The legacy EC2 runtime still uses the default VPC path. The next networking iteration should move ECS tasks into private subnets and add NAT or private VPC endpoints so private tasks can reach ECR and CloudWatch Logs.
+ECS now uses the custom private subnets behind the public ALB. The legacy EC2 runtime still uses the default VPC path. For higher availability, a future iteration can add one NAT gateway per Availability Zone or replace NAT egress for AWS services with private VPC endpoints.
 
 ## Notes
 

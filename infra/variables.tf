@@ -72,7 +72,7 @@ variable "ecs_log_retention_days" {
 
 variable "ecs_assign_public_ip" {
   type    = bool
-  default = true
+  default = false
 }
 
 variable "vpc_cidr" {

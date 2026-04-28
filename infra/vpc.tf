@@ -22,6 +22,8 @@ locals {
       availability_zone = local.subnet_azs[index]
     }
   }
+
+  nat_public_subnet_key = sort(keys(local.public_subnets))[0]
 }
 
 resource "aws_vpc" "app" {
@@ -88,4 +90,43 @@ resource "aws_route_table_association" "public" {
 
   subnet_id      = each.value.id
   route_table_id = aws_route_table.public.id
+}
+
+resource "aws_eip" "nat" {
+  domain = "vpc"
+
+  tags = {
+    Name = "devops-api-nat-eip"
+  }
+}
+
+resource "aws_nat_gateway" "app" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[local.nat_public_subnet_key].id
+
+  tags = {
+    Name = "devops-api-nat"
+  }
+
+  depends_on = [aws_internet_gateway.app]
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.app.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.app.id
+  }
+
+  tags = {
+    Name = "devops-api-private-rt"
+  }
+}
+
+resource "aws_route_table_association" "private" {
+  for_each = aws_subnet.private
+
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.private.id
 }
