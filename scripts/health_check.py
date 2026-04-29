@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import sys
+import time
 from dataclasses import dataclass
 from typing import Optional
+
+import requests
 
 
 def _configure_stdio_utf8() -> None:
@@ -52,6 +56,102 @@ def print_report(
         print(f"All checks passed. ({total}/{total})")
     else:
         print(f"{failed} check(s) failed. ({failed}/{total})")
+
+
+def _http_base_url(alb_dns: str) -> str:
+    """Normalize ALB host or host:port to an HTTP base URL without trailing slash."""
+    host = alb_dns.strip()
+    if host.startswith(("http://", "https://")):
+        return host.rstrip("/")
+    return f"http://{host}".rstrip("/")
+
+
+def check_alb_liveness(
+    alb_dns: str,
+    *,
+    timeout: float = 10.0,
+    retries: int = 3,
+    backoff_seconds: float = 2.0,
+) -> CheckResult:
+    """GET / — expect HTTP 200; retry on transient failures."""
+    base = _http_base_url(alb_dns)
+    url = f"{base}/"
+    last_detail = ""
+
+    for attempt in range(1, retries + 1):
+        try:
+            t0 = time.perf_counter()
+            resp = requests.get(url, timeout=timeout)
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+            if resp.status_code == 200:
+                return CheckResult(
+                    name="ALB liveness",
+                    passed=True,
+                    message=f"GET / {resp.status_code} OK",
+                    duration_ms=elapsed_ms,
+                )
+            last_detail = f"HTTP {resp.status_code}"
+        except requests.RequestException as exc:
+            last_detail = str(exc)
+
+        if attempt < retries:
+            time.sleep(backoff_seconds)
+
+    return CheckResult(
+        name="ALB liveness",
+        passed=False,
+        message=f"GET / failed after {retries} attempt(s): {last_detail}",
+        duration_ms=None,
+    )
+
+
+def check_alb_health(
+    alb_dns: str,
+    *,
+    timeout: float = 10.0,
+    retries: int = 3,
+    backoff_seconds: float = 2.0,
+) -> CheckResult:
+    """GET /health — expect HTTP 200 and JSON {\"status\": \"ok\"}."""
+    base = _http_base_url(alb_dns)
+    url = f"{base}/health"
+    last_detail = ""
+
+    for attempt in range(1, retries + 1):
+        try:
+            t0 = time.perf_counter()
+            resp = requests.get(url, timeout=timeout)
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+
+            if resp.status_code != 200:
+                last_detail = f"HTTP {resp.status_code}"
+            else:
+                try:
+                    body = resp.json()
+                except json.JSONDecodeError:
+                    last_detail = "response is not valid JSON"
+                else:
+                    if isinstance(body, dict) and body.get("status") == "ok":
+                        snippet = json.dumps({"status": body.get("status")}, separators=(",", ":"))
+                        return CheckResult(
+                            name="ALB health",
+                            passed=True,
+                            message=f'GET /health {resp.status_code} {snippet}',
+                            duration_ms=elapsed_ms,
+                        )
+                    last_detail = f'body status is not "ok": {body!r}'
+        except requests.RequestException as exc:
+            last_detail = str(exc)
+
+        if attempt < retries:
+            time.sleep(backoff_seconds)
+
+    return CheckResult(
+        name="ALB health",
+        passed=False,
+        message=f"GET /health failed after {retries} attempt(s): {last_detail}",
+        duration_ms=None,
+    )
 
 
 def _demo_report() -> None:
