@@ -23,7 +23,6 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      KUBECTL_VERSION: "v1.30.0"
       KUBECONFORM_VERSION: v0.6.7
       KUBE_SCHEMA_VERSION: "1.30.0"
 
@@ -36,18 +35,6 @@ jobs:
         with:
           version: v3.14.4
 
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: ${{ env.KUBECTL_VERSION }}
-
-      - name: Helm lint (devops-api)
-        run: helm lint k8s/helm/devops-api/
-
-      - name: Helm template + kubectl schema dry-run (client)
-        run: |
-          helm template devops-api k8s/helm/devops-api/ | kubectl apply --dry-run=client -f -
-
       - name: Install kubeconform
         env:
           VERSION: ${{ env.KUBECONFORM_VERSION }}
@@ -58,6 +45,19 @@ jobs:
             | tar xz
           sudo install -m755 kubeconform /usr/local/bin/kubeconform
           kubeconform -v
+
+      - name: Helm lint (devops-api)
+        run: helm lint k8s/helm/devops-api/
+
+      # kubectl apply --dry-run=client can still try to fetch OpenAPI from the apiserver (e.g. localhost:8080).
+      # kubeconform validates rendered YAML against pinned K8s OpenAPI schemas — no cluster or kubeconfig needed.
+      - name: Helm template + kubeconform (rendered chart)
+        run: >-
+          helm template devops-api k8s/helm/devops-api/
+          | kubeconform
+          -kubernetes-version ${{ env.KUBE_SCHEMA_VERSION }}
+          -summary
+          -
 
       - name: Kubeconform (k8s/manifests against stable API schema)
         run: >-
