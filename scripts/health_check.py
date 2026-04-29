@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import sys
 import time
 from dataclasses import dataclass
 from typing import Optional
 
+import boto3
 import requests
+from botocore.exceptions import ClientError
 
 
 def _configure_stdio_utf8() -> None:
@@ -154,6 +158,278 @@ def check_alb_health(
     )
 
 
+def check_ecs_service(
+    *,
+    cluster: str,
+    service_name: str,
+    region: str,
+) -> CheckResult:
+    """Ensure ECS runningCount matches desiredCount; note pending and rollout state."""
+    ecs = boto3.client("ecs", region_name=region)
+    try:
+        resp = ecs.describe_services(cluster=cluster, services=[service_name])
+    except ClientError as exc:
+        return CheckResult(
+            name="ECS service",
+            passed=False,
+            message=f"describe_services failed: {exc}",
+            duration_ms=None,
+        )
+
+    failures = resp.get("failures") or []
+    if failures:
+        detail = failures[0].get("reason", failures[0])
+        return CheckResult(
+            name="ECS service",
+            passed=False,
+            message=f"ECS API failure: {detail}",
+            duration_ms=None,
+        )
+
+    services = resp.get("services") or []
+    if not services:
+        return CheckResult(
+            name="ECS service",
+            passed=False,
+            message=f"service {service_name!r} not found in cluster {cluster!r}",
+            duration_ms=None,
+        )
+
+    svc = services[0]
+    running = svc.get("runningCount", 0)
+    desired = svc.get("desiredCount", 0)
+    pending = svc.get("pendingCount", 0)
+    deployments = svc.get("deployments") or []
+
+    msg = f"{running}/{desired} tasks running, {pending} pending"
+    extras: list[str] = []
+    if pending > 0 and running == desired:
+        extras.append("pending tasks (deployment may still be converging)")
+    if len(deployments) > 1:
+        extras.append("multiple deployments active (rollout in progress)")
+    if extras:
+        msg = f"{msg} — note: {'; '.join(extras)}"
+
+    passed = running == desired
+    return CheckResult(
+        name="ECS service",
+        passed=passed,
+        message=msg,
+        duration_ms=None,
+    )
+
+
+def _log_message_indicates_error(message: str) -> bool:
+    """Match log lines containing ERROR, error, Exception, or FATAL (per project spec)."""
+    if "ERROR" in message or "error" in message:
+        return True
+    if "Exception" in message:
+        return True
+    if "FATAL" in message:
+        return True
+    return False
+
+
+def check_cloudwatch_errors(
+    *,
+    log_group: str,
+    region: str,
+    log_lookback_minutes: int,
+) -> CheckResult:
+    """Scan recent log events for error-like substrings."""
+    logs = boto3.client("logs", region_name=region)
+    end_ms = int(time.time() * 1000)
+    start_ms = end_ms - log_lookback_minutes * 60 * 1000
+
+    error_count = 0
+    next_token: Optional[str] = None
+
+    try:
+        while True:
+            kwargs: dict = {
+                "logGroupName": log_group,
+                "startTime": start_ms,
+                "endTime": end_ms,
+            }
+            if next_token:
+                kwargs["nextToken"] = next_token
+            resp = logs.filter_log_events(**kwargs)
+            for ev in resp.get("events", ()):
+                if _log_message_indicates_error(ev.get("message", "")):
+                    error_count += 1
+            next_token = resp.get("nextToken")
+            if not next_token:
+                break
+    except ClientError as exc:
+        return CheckResult(
+            name="CloudWatch",
+            passed=False,
+            message=f"filter_log_events failed: {exc}",
+            duration_ms=None,
+        )
+
+    window = f"last {log_lookback_minutes} min"
+    if error_count == 0:
+        msg = f"0 errors in {window}"
+    else:
+        msg = f"{error_count} error events in {window}"
+
+    return CheckResult(
+        name="CloudWatch",
+        passed=(error_count == 0),
+        message=msg,
+        duration_ms=None,
+    )
+
+
+def run_checks(
+    *,
+    alb_dns: str,
+    region: str,
+    cluster: str,
+    service_name: str,
+    log_group: str,
+    log_lookback_minutes: int,
+    timeout: float,
+    retries: int,
+    skip_aws: bool,
+) -> list[CheckResult]:
+    """Run all enabled checks in order."""
+    backoff_seconds = 2.0
+    results: list[CheckResult] = [
+        check_alb_liveness(
+            alb_dns,
+            timeout=timeout,
+            retries=retries,
+            backoff_seconds=backoff_seconds,
+        ),
+        check_alb_health(
+            alb_dns,
+            timeout=timeout,
+            retries=retries,
+            backoff_seconds=backoff_seconds,
+        ),
+    ]
+    if not skip_aws:
+        results.append(check_ecs_service(cluster=cluster, service_name=service_name, region=region))
+        results.append(
+            check_cloudwatch_errors(
+                log_group=log_group,
+                region=region,
+                log_lookback_minutes=log_lookback_minutes,
+            )
+        )
+    return results
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
+
+
+def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+    defaults_region = (
+        os.environ.get("AWS_REGION")
+        or os.environ.get("AWS_DEFAULT_REGION")
+        or "eu-north-1"
+    )
+    parser = argparse.ArgumentParser(
+        description="Verify deployment health (ALB HTTP, ECS, CloudWatch logs).",
+    )
+    parser.add_argument(
+        "--alb-dns",
+        default=os.environ.get("ALB_DNS"),
+        help="ALB DNS name or host:port (default: env ALB_DNS)",
+    )
+    parser.add_argument(
+        "--region",
+        default=defaults_region,
+        help="AWS region (default: AWS_REGION / AWS_DEFAULT_REGION or eu-north-1)",
+    )
+    parser.add_argument(
+        "--cluster",
+        default=os.environ.get("ECS_CLUSTER", "devops-api"),
+        help="ECS cluster name (default: env ECS_CLUSTER or devops-api)",
+    )
+    parser.add_argument(
+        "--service",
+        default=os.environ.get("ECS_SERVICE", "devops-api"),
+        help="ECS service name (default: env ECS_SERVICE or devops-api)",
+    )
+    parser.add_argument(
+        "--log-group",
+        default=os.environ.get("LOG_GROUP", "/ecs/devops-api"),
+        help="CloudWatch log group (default: env LOG_GROUP or /ecs/devops-api)",
+    )
+    parser.add_argument(
+        "--log-lookback",
+        type=int,
+        default=int(os.environ.get("LOG_LOOKBACK_MINUTES", "5")),
+        metavar="MINUTES",
+        help="Minutes of logs to scan (default: env LOG_LOOKBACK_MINUTES or 5)",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=float(os.environ.get("HEALTH_CHECK_TIMEOUT", "10")),
+        help="HTTP timeout in seconds (default: env HEALTH_CHECK_TIMEOUT or 10)",
+    )
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=int(os.environ.get("HEALTH_CHECK_RETRIES", "3")),
+        help="HTTP retry attempts (default: env HEALTH_CHECK_RETRIES or 3)",
+    )
+    parser.add_argument(
+        "--skip-aws",
+        action="store_true",
+        help="Skip ECS and CloudWatch checks (no AWS API calls)",
+    )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Print sample reports only and exit successfully",
+    )
+    args = parser.parse_args(argv)
+    if _env_truthy("SKIP_AWS"):
+        args.skip_aws = True
+    return args
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    args = _parse_args(argv)
+    if args.demo:
+        _demo_report()
+        return 0
+
+    alb_dns = args.alb_dns
+    if not alb_dns:
+        print("error: provide --alb-dns or set ALB_DNS", file=sys.stderr)
+        return 1
+
+    results = run_checks(
+        alb_dns=alb_dns,
+        region=args.region,
+        cluster=args.cluster,
+        service_name=args.service,
+        log_group=args.log_group,
+        log_lookback_minutes=args.log_lookback,
+        timeout=args.timeout,
+        retries=args.retries,
+        skip_aws=args.skip_aws,
+    )
+    target_url = _http_base_url(alb_dns)
+    print_report(
+        target_url=target_url,
+        region=args.region,
+        cluster=args.cluster,
+        service=args.service,
+        results=results,
+    )
+    if any(not r.passed for r in results):
+        return 1
+    return 0
+
+
 def _demo_report() -> None:
     """Sample output for manual verification of formatting."""
     all_pass = [
@@ -216,4 +492,4 @@ def _demo_report() -> None:
 
 
 if __name__ == "__main__":
-    _demo_report()
+    raise SystemExit(main())
