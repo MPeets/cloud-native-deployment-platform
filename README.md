@@ -1,6 +1,11 @@
 # cloud-native-deployment-platform
-End-to-end CI/CD pipeline with Docker, AWS, and Terraform
+End-to-end CI/CD pipeline with Docker, AWS, and Terraform — plus **Kubernetes packaging** (manifests and Helm) for portable deployment patterns and portfolio use.
 
+## Kubernetes (`k8s/`)
+
+The production path in this repository is **ECS Fargate** (see below). The [`k8s/`](k8s/README.md) directory holds **vanilla YAML manifests** and a **Helm chart** for the same API. Together they support local clusters (Docker Desktop, kind, minikube) or a future move to managed Kubernetes without changing the current Terraform design.
+
+**Start here:** [`k8s/README.md`](k8s/README.md) — layout, design notes, `kubectl` / `helm` commands, local testing tips, and how **CI** lints manifests and Helm on `k8s/**` changes (`.github/workflows/k8s-lint.yml`).
 ## Infrastructure setup
 
 Terraform backend bootstrapping now lives in `infra/bootstrap`; setup and state migration steps are documented in `infra/README.md`.

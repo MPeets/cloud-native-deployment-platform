@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "devops-api.fullname" . }}
+  labels:
+    {{- include "devops-api.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.autoscaling.enabled }}
+  replicas: {{ .Values.autoscaling.minReplicas }}
+  {{- else }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  strategy:
+{{ toYaml .Values.strategy | indent 4 }}
+  selector:
+    matchLabels:
+      {{- include "devops-api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "devops-api.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "devops-api.serviceAccountName" . }}
+      containers:
+        - name: {{ include "devops-api.name" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+          resources:
+{{ toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+{{ toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+{{ toYaml .Values.readinessProbe | nindent 12 }}

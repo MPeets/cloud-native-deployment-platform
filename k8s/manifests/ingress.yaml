@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-api
+  labels:
+    app: devops-api
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: devops-api.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: devops-api
+                port:
+                  number: 80
+  # tls:
+  #   - hosts:
+  #       - devops-api.local
+  #     secretName: devops-api-tls
