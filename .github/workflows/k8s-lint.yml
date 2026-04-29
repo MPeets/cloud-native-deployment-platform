@@ -1,0 +1,69 @@
+name: K8s — lint manifests & Helm
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "k8s/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "k8s/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: k8s-lint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    env:
+      KUBECTL_VERSION: "v1.30.0"
+      KUBECONFORM_VERSION: v0.6.7
+      KUBE_SCHEMA_VERSION: "1.30.0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Helm lint (devops-api)
+        run: helm lint k8s/helm/devops-api/
+
+      - name: Helm template + kubectl schema dry-run (client)
+        run: |
+          helm template devops-api k8s/helm/devops-api/ | kubectl apply --dry-run=client -f -
+
+      - name: Install kubeconform
+        env:
+          VERSION: ${{ env.KUBECONFORM_VERSION }}
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --retry-delay 2 \
+            "https://github.com/yannh/kubeconform/releases/download/${VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar xz
+          sudo install -m755 kubeconform /usr/local/bin/kubeconform
+          kubeconform -v
+
+      - name: Kubeconform (k8s/manifests against stable API schema)
+        run: >-
+          kubeconform
+          -kubernetes-version ${{ env.KUBE_SCHEMA_VERSION }}
+          -summary
+          k8s/manifests/deployment.yaml
+          k8s/manifests/service.yaml
+          k8s/manifests/ingress.yaml

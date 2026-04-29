@@ -76,8 +76,13 @@ helm upgrade --install demo ./k8s/helm/devops-api -n devops --create-namespace \
   --set image.pullPolicy=IfNotPresent
 ```
 
-## Local cluster (e.g. Docker Desktop)
+## CI validation (GitHub Actions)
 
+Workflow: [`.github/workflows/k8s-lint.yml`](../.github/workflows/k8s-lint.yml). On **push or pull_request** targeting **`main`**, runs only when files under **`k8s/`** change. It runs **helm lint**, pipes **helm template** through **`kubectl apply --dry-run=client`** (offline validation against the bundled API schema — no kubeconfig needed), then **kubeconform** on the rendered-style API checks for **`k8s/manifests/*.yaml`**.
+
+**Why paths are only `k8s/**`:** this job validates packaging YAML, not application source. Updates under `app/` or `worker/` do not mutate those files unless you edit image tags or related values here; widening paths would rerun the workflow on unrelated Node commits. Use **manual re-run** in the Actions UI after changing app behavior if you want another pass without touching `k8s/`.
+
+## Local cluster (e.g. Docker Desktop)
 1. Enable **Kubernetes** in Docker Desktop and wait until it is running.
 2. `kubectl config use-context docker-desktop` (or whatever `kubectl config get-contexts` shows).
 3. Install an **Ingress controller** that satisfies `ingressClassName: nginx` (e.g. **ingress-nginx** Helm chart).
