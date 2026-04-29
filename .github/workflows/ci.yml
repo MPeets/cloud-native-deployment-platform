@@ -6,6 +6,7 @@ on:
     paths:
       - "app/**"
       - "worker/**"
+      - "scripts/**"
 
 jobs:
   build:
@@ -58,8 +59,15 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.sha }}
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install health check dependencies
+        run: pip install -r scripts/requirements.txt
+
       - name: Run health check
         run: |
           docker run -d -p 3000:3000 --name test ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.sha }}
-          sleep 5
-          curl --fail http://localhost:3000
+          python scripts/health_check.py --alb-dns localhost:3000 --retries 5 --skip-aws

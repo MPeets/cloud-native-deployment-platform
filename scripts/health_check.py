@@ -35,6 +35,21 @@ class CheckResult:
     duration_ms: Optional[float] = None
 
 
+@dataclass(frozen=True)
+class RunChecksParams:  # pylint: disable=too-many-instance-attributes
+    """Inputs for run_checks (single bundle keeps call sites and pylint happy)."""
+
+    alb_dns: str
+    region: str
+    cluster: str
+    service_name: str
+    log_group: str
+    log_lookback_minutes: int
+    timeout: float
+    retries: int
+    skip_aws: bool
+
+
 def print_report(
     *,
     target_url: str,
@@ -195,7 +210,11 @@ def check_ecs_service(
             duration_ms=None,
         )
 
-    svc = services[0]
+    return _ecs_service_counts_result(services[0])
+
+
+def _ecs_service_counts_result(svc: dict) -> CheckResult:
+    """Build ECS task-count CheckResult from describe_services service dict."""
     running = svc.get("runningCount", 0)
     desired = svc.get("desiredCount", 0)
     pending = svc.get("pendingCount", 0)
@@ -241,9 +260,44 @@ def check_cloudwatch_errors(
     end_ms = int(time.time() * 1000)
     start_ms = end_ms - log_lookback_minutes * 60 * 1000
 
+    count, cw_err = _cloudwatch_error_like_event_count(
+        logs,
+        log_group=log_group,
+        start_ms=start_ms,
+        end_ms=end_ms,
+    )
+    if cw_err is not None:
+        return CheckResult(
+            name="CloudWatch",
+            passed=False,
+            message=f"filter_log_events failed: {cw_err}",
+            duration_ms=None,
+        )
+
+    window = f"last {log_lookback_minutes} min"
+    if count == 0:
+        msg = f"0 errors in {window}"
+    else:
+        msg = f"{count} error events in {window}"
+
+    return CheckResult(
+        name="CloudWatch",
+        passed=(count == 0),
+        message=msg,
+        duration_ms=None,
+    )
+
+
+def _cloudwatch_error_like_event_count(
+    logs,
+    *,
+    log_group: str,
+    start_ms: int,
+    end_ms: int,
+) -> tuple[int, Optional[ClientError]]:
+    """Paginate filter_log_events and count messages matching error patterns."""
     error_count = 0
     next_token: Optional[str] = None
-
     try:
         while True:
             kwargs: dict = {
@@ -261,62 +315,40 @@ def check_cloudwatch_errors(
             if not next_token:
                 break
     except ClientError as exc:
-        return CheckResult(
-            name="CloudWatch",
-            passed=False,
-            message=f"filter_log_events failed: {exc}",
-            duration_ms=None,
-        )
-
-    window = f"last {log_lookback_minutes} min"
-    if error_count == 0:
-        msg = f"0 errors in {window}"
-    else:
-        msg = f"{error_count} error events in {window}"
-
-    return CheckResult(
-        name="CloudWatch",
-        passed=(error_count == 0),
-        message=msg,
-        duration_ms=None,
-    )
+        return 0, exc
+    return error_count, None
 
 
-def run_checks(
-    *,
-    alb_dns: str,
-    region: str,
-    cluster: str,
-    service_name: str,
-    log_group: str,
-    log_lookback_minutes: int,
-    timeout: float,
-    retries: int,
-    skip_aws: bool,
-) -> list[CheckResult]:
+def run_checks(params: RunChecksParams) -> list[CheckResult]:
     """Run all enabled checks in order."""
     backoff_seconds = 2.0
     results: list[CheckResult] = [
         check_alb_liveness(
-            alb_dns,
-            timeout=timeout,
-            retries=retries,
+            params.alb_dns,
+            timeout=params.timeout,
+            retries=params.retries,
             backoff_seconds=backoff_seconds,
         ),
         check_alb_health(
-            alb_dns,
-            timeout=timeout,
-            retries=retries,
+            params.alb_dns,
+            timeout=params.timeout,
+            retries=params.retries,
             backoff_seconds=backoff_seconds,
         ),
     ]
-    if not skip_aws:
-        results.append(check_ecs_service(cluster=cluster, service_name=service_name, region=region))
+    if not params.skip_aws:
+        results.append(
+            check_ecs_service(
+                cluster=params.cluster,
+                service_name=params.service_name,
+                region=params.region,
+            )
+        )
         results.append(
             check_cloudwatch_errors(
-                log_group=log_group,
-                region=region,
-                log_lookback_minutes=log_lookback_minutes,
+                log_group=params.log_group,
+                region=params.region,
+                log_lookback_minutes=params.log_lookback_minutes,
             )
         )
     return results
@@ -396,6 +428,7 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    """Parse CLI arguments, run checks, print report; return 0 if all pass."""
     args = _parse_args(argv)
     if args.demo:
         _demo_report()
@@ -407,15 +440,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 1
 
     results = run_checks(
-        alb_dns=alb_dns,
-        region=args.region,
-        cluster=args.cluster,
-        service_name=args.service,
-        log_group=args.log_group,
-        log_lookback_minutes=args.log_lookback,
-        timeout=args.timeout,
-        retries=args.retries,
-        skip_aws=args.skip_aws,
+        RunChecksParams(
+            alb_dns=alb_dns,
+            region=args.region,
+            cluster=args.cluster,
+            service_name=args.service,
+            log_group=args.log_group,
+            log_lookback_minutes=args.log_lookback,
+            timeout=args.timeout,
+            retries=args.retries,
+            skip_aws=args.skip_aws,
+        )
     )
     target_url = _http_base_url(alb_dns)
     print_report(
