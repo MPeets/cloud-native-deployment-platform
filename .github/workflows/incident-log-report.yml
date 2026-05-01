@@ -52,13 +52,13 @@ jobs:
           TF_AWS_REGION: ${{ vars.TF_AWS_REGION }}
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_INCIDENT_LOGS_READER_ROLE_ARN }}
           aws-region: ${{ steps.aws_region.outputs.region }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -86,7 +86,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Markdown artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: incident-log-report
           path: incident-report.md
