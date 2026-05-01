@@ -2,9 +2,9 @@
 """Fetch CloudWatch Logs for an incident window and emit structured output.
 
 Companion to ``health_check.py`` (live checks); this supports post-incident review.
-Right now events are dumped as JSON with pagination handled correctly; grouping
-by log level is added in a dedicated report step.
+Pulls paginated events, classifies each line by log level, and prints JSON or Markdown.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,6 +21,14 @@ from botocore.exceptions import ClientError
 from dateutil import parser as date_parser
 
 _SINCE_RE = re.compile(r"^(\d+)([smhd])$", re.IGNORECASE)
+_JSON_LEVEL_ERROR = re.compile(r'"level"\s*:\s*"error"', re.IGNORECASE)
+_JSON_LEVEL_WARN = re.compile(r'"level"\s*:\s*"warn', re.IGNORECASE)
+_JSON_LEVEL_INFO = re.compile(r'"level"\s*:\s*"info"', re.IGNORECASE)
+_TEXT_LEVEL_ERROR = re.compile(r"\bERROR\b", re.IGNORECASE)
+_TEXT_LEVEL_WARN = re.compile(r"\bWARN(?:ING)?\b", re.IGNORECASE)
+_TEXT_LEVEL_INFO = re.compile(r"\bINFO\b", re.IGNORECASE)
+
+_LEVEL_KEYS = ("ERROR", "WARN", "INFO", "UNKNOWN")
 
 
 @dataclass(frozen=True)
@@ -76,6 +84,102 @@ def fetch_log_events(
     except ClientError as exc:
         return [], exc
     return collected, None
+
+
+def _classify_log_level(message: str) -> str:
+    """Best-effort level from JSON log fields or plain-text tokens (order: ERROR → WARN → INFO)."""
+    patterns: tuple[tuple[re.Pattern[str], str], ...] = (
+        (_JSON_LEVEL_ERROR, "ERROR"),
+        (_JSON_LEVEL_WARN, "WARN"),
+        (_JSON_LEVEL_INFO, "INFO"),
+        (_TEXT_LEVEL_ERROR, "ERROR"),
+        (_TEXT_LEVEL_WARN, "WARN"),
+        (_TEXT_LEVEL_INFO, "INFO"),
+    )
+    for pattern, label in patterns:
+        if pattern.search(message):
+            return label
+    return "UNKNOWN"
+
+
+def _format_ts_utc(ms: int) -> str:
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+@dataclass(frozen=True)
+class IncidentReportInput:
+    """Inputs for ``build_incident_report`` (keeps the builder signature small for pylint)."""
+
+    log_group: str
+    region: str
+    window: TimeWindowMs
+    events: list[RawLogEvent]
+    truncated: bool
+    generated_at: Optional[datetime] = None
+
+
+def build_incident_report(inp: IncidentReportInput) -> dict[str, Any]:
+    """Group events by classified level for JSON or Markdown rendering."""
+    gen = (inp.generated_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    by_level: dict[str, list[dict[str, Any]]] = {k: [] for k in _LEVEL_KEYS}
+    for ev in inp.events:
+        level = _classify_log_level(ev.message)
+        by_level[level].append(
+            {
+                "timestamp_ms": ev.timestamp_ms,
+                "timestamp_utc": _format_ts_utc(ev.timestamp_ms),
+                "log_stream": ev.log_stream,
+                "message": ev.message,
+            }
+        )
+    summary = {lvl: len(by_level[lvl]) for lvl in _LEVEL_KEYS}
+    return {
+        "incident_report_version": 1,
+        "generated_at": gen.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "log_group": inp.log_group,
+        "region": inp.region,
+        "start_ms": inp.window.start_ms,
+        "end_ms": inp.window.end_ms,
+        "truncated": inp.truncated,
+        "summary": summary,
+        "by_level": by_level,
+    }
+
+
+def format_report_markdown(report: dict[str, Any]) -> str:
+    """Render a short incident-ready Markdown document from ``build_incident_report`` output."""
+    lines: list[str] = [
+        "# Incident log report",
+        "",
+        f"- **Generated**: {report['generated_at']}",
+        f"- **Log group**: `{report['log_group']}`",
+        f"- **Region**: `{report['region']}`",
+        f"- **Window (epoch ms)**: `{report['start_ms']}` → `{report['end_ms']}`",
+        f"- **Truncated (cap hit)**: {report['truncated']}",
+        "",
+        "## Summary",
+        "",
+    ]
+    for lvl in _LEVEL_KEYS:
+        lines.append(f"- **{lvl}**: {report['summary'][lvl]}")
+    lines.append("")
+
+    for lvl in _LEVEL_KEYS:
+        items = report["by_level"][lvl]
+        if not items:
+            continue
+        lines.append(f"## {lvl} ({len(items)})")
+        lines.append("")
+        for item in items:
+            stream = item["log_stream"] or "(default)"
+            lines.append(f"### {item['timestamp_utc']} — `{stream}`")
+            lines.append("")
+            lines.append("```")
+            lines.append(str(item["message"]))
+            lines.append("```")
+            lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _parse_since(since: str, *, now: Optional[datetime] = None) -> tuple[datetime, datetime]:
@@ -146,18 +250,21 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Pull logs from a CloudWatch log group over a time window. "
-            "Emits JSON with paginated raw events; level grouping is layered on next."
+            "Groups lines by level (ERROR / WARN / INFO) and prints JSON or Markdown."
         ),
     )
     parser.add_argument(
         "--log-group",
         default=os.environ.get("LOG_GROUP", "/ecs/devops-api"),
-        help="CloudWatch log group (default: env LOG_GROUP or /ecs/devops-api)",
+        help="CloudWatch Logs group name (default: $LOG_GROUP or /ecs/devops-api)",
     )
     parser.add_argument(
         "--region",
         default=_default_region(),
-        help="AWS region (default: AWS_REGION / AWS_DEFAULT_REGION or eu-north-1)",
+        help=(
+            "AWS region for the Logs API "
+            "(default: $AWS_REGION / $AWS_DEFAULT_REGION or eu-north-1)"
+        ),
     )
     parser.add_argument(
         "--since",
@@ -188,6 +295,12 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         metavar="N",
         help="Stop after N events (0 = no cap; default 100000)",
     )
+    parser.add_argument(
+        "--format",
+        choices=("json", "markdown"),
+        default="json",
+        help="Incident report output format (default json)",
+    )
     args = parser.parse_args(argv)
     modes = int(bool(args.since)) + int(bool(args.time_from or args.time_to))
     if modes == 0:
@@ -201,35 +314,8 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     return args
 
 
-def _raw_events_to_json_payload(
-    *,
-    log_group: str,
-    region: str,
-    window: TimeWindowMs,
-    events: list[RawLogEvent],
-    truncated: bool,
-) -> dict[str, Any]:
-    """Build a JSON-serializable dict (flat event list; level grouping comes later)."""
-    return {
-        "log_group": log_group,
-        "region": region,
-        "start_ms": window.start_ms,
-        "end_ms": window.end_ms,
-        "event_count": len(events),
-        "truncated": truncated,
-        "events": [
-            {
-                "timestamp_ms": e.timestamp_ms,
-                "log_stream": e.log_stream,
-                "message": e.message,
-            }
-            for e in events
-        ],
-    }
-
-
 def main(argv: Optional[list[str]] = None) -> int:
-    """Entry point: parse window, fetch CloudWatch logs with pagination, print JSON."""
+    """Entry point: fetch logs, classify by level, print JSON or Markdown."""
     args = _parse_args(argv)
     try:
         window = resolve_time_window_ms(
@@ -259,14 +345,19 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 1
 
     truncated = cap is not None and len(events) >= cap
-    payload = _raw_events_to_json_payload(
-        log_group=args.log_group,
-        region=args.region,
-        window=window,
-        events=events,
-        truncated=truncated,
+    report = build_incident_report(
+        IncidentReportInput(
+            log_group=args.log_group,
+            region=args.region,
+            window=window,
+            events=events,
+            truncated=truncated,
+        )
     )
-    print(json.dumps(payload, indent=2))
+    if args.format == "markdown":
+        print(format_report_markdown(report), end="")
+    else:
+        print(json.dumps(report, indent=2))
     return 0
 
 
