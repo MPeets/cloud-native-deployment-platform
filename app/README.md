@@ -1,6 +1,6 @@
 # Application (`app/`)
 
-This folder holds a small **HTTP API** that the rest of the repository builds, containers, and deploys. It is the “thing that runs in production”: load balancers and orchestration forward traffic here, and CI builds a Docker image from this code.
+This folder holds a small **HTTP API** that the rest of the repository builds, containers, and deploys. It is the public entry point in production: load balancers and orchestration forward traffic here, while the sibling worker runs as a separate background service.
 
 ## What it does (plain language)
 

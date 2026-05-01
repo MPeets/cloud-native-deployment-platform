@@ -1,3 +1,7 @@
+locals {
+  worker_image = var.worker_image != null && var.worker_image != "" ? var.worker_image : replace(var.docker_image, "/devops-api:", "/devops-worker:")
+}
+
 resource "aws_security_group" "ecs_service" {
   count = var.enable_ecs ? 1 : 0
 
@@ -234,6 +238,33 @@ resource "aws_ecs_task_definition" "app" {
   ])
 }
 
+resource "aws_ecs_task_definition" "worker" {
+  count = var.enable_ecs ? 1 : 0
+
+  family                   = "devops-worker"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = var.ecs_task_cpu
+  memory                   = var.ecs_task_memory
+  execution_role_arn       = aws_iam_role.ecs_task_execution[0].arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "devops-worker"
+      image     = local.worker_image
+      essential = true
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.ecs[0].name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "worker"
+        }
+      }
+    }
+  ])
+}
+
 resource "aws_ecs_service" "app" {
   count = var.enable_ecs ? 1 : 0
 
@@ -259,4 +290,22 @@ resource "aws_ecs_service" "app" {
   }
 
   depends_on = [aws_lb_listener.http[0]]
+}
+
+resource "aws_ecs_service" "worker" {
+  count = var.enable_ecs ? 1 : 0
+
+  name                               = "devops-worker"
+  cluster                            = aws_ecs_cluster.app[0].id
+  task_definition                    = aws_ecs_task_definition.worker[0].arn
+  desired_count                      = var.ecs_worker_desired_count
+  launch_type                        = "FARGATE"
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+
+  network_configuration {
+    subnets          = values(aws_subnet.private)[*].id
+    security_groups  = [aws_security_group.ecs_service[0].id]
+    assign_public_ip = var.ecs_assign_public_ip
+  }
 }
