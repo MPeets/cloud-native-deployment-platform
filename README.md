@@ -10,6 +10,8 @@ The production path in this repository is **ECS Fargate** (see below). The [`k8s
 
 Terraform backend bootstrapping now lives in `infra/bootstrap`; setup and state migration steps are documented in `infra/README.md`.
 
+Infrastructure drift reporting is documented in `infra/README.md` and automated by `.github/workflows/terraform-drift-report.yml`.
+
 ## Runtime architecture
 
 The primary runtime is **ECS Fargate** behind an **Application Load Balancer**. Terraform provisions the ECS cluster, task definition, service, ALB, target group, security groups, IAM execution role, and CloudWatch logging.
