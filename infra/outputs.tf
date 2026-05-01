@@ -30,3 +30,12 @@ output "vpc_endpoint_ids" {
     s3      = aws_vpc_endpoint.s3[0].id
   } : {}
 }
+
+output "github_actions_incident_logs_reader_role_arn" {
+  description = "Read-only role for incident log workflow; set GitHub variable AWS_INCIDENT_LOGS_READER_ROLE_ARN to this ARN."
+  value = (
+    var.enable_ecs && var.enable_github_incident_logs_reader_role
+    ? aws_iam_role.github_incident_logs_reader[0].arn
+    : null
+  )
+}
