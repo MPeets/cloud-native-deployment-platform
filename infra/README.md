@@ -63,6 +63,28 @@ terraform plan
 terraform apply
 ```
 
+## Drift Reporting
+
+The repository includes a small drift reporter that runs Terraform from the repo root, parses `terraform plan -detailed-exitcode -json`, and prints a human-readable summary of managed resources that differ from the desired state:
+
+```bash
+python scripts/terraform_drift_report.py --terraform-dir infra
+```
+
+Exit codes are designed for CI:
+
+- `0`: no drift detected
+- `1`: script, Terraform, or JSON parsing error
+- `2`: drift detected
+
+For deterministic local checks, you can also pipe Terraform JSON into the parser without running Terraform:
+
+```bash
+terraform plan -detailed-exitcode -json | python ../scripts/terraform_drift_report.py --plan-json -
+```
+
+GitHub Actions also runs this on a weekday schedule in `.github/workflows/terraform-drift-report.yml`; the workflow writes the report to the job summary and uploads it as an artifact.
+
 ## ECS Fargate (cloud-native runtime)
 
 This stack contains an ECS Fargate baseline (cluster + task definition + service) running the `docker_image`.
