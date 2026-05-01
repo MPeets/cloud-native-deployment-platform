@@ -7,5 +7,8 @@ node_modules
 *.tfplan
 crash.log
 
+# Windows: accidental file created by bad redirects (e.g. `> NUL` in Git Bash)
+/NUL
+
 # Local Terraform variable overrides (contains personal IPs, etc.)
 infra/terraform.tfvars
