@@ -6,7 +6,10 @@ on:
     paths:
       - "app/**"
       - "worker/**"
-      - "scripts/**"
+
+concurrency:
+  group: ci-docker-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
