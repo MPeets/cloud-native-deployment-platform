@@ -47,7 +47,7 @@ Workflows assume an IAM role via **OIDC**—no long-lived AWS access keys stored
 
 **Optional (incident log workflow):** set `AWS_INCIDENT_LOGS_READER_ROLE_ARN` from Terraform output `github_actions_incident_logs_reader_role_arn` — see [`infra/README.md`](infra/README.md).
 
-The IAM **trust policy** for `AWS_ROLE_TO_ASSUME` must allow `token.actions.githubusercontent.com` for your repository.
+The IAM **trust policy** for `AWS_ROLE_TO_ASSUME` must allow `token.actions.githubusercontent.com` for your repository. If you use [`infra/aws-oidc-role-trust-policy.json`](infra/aws-oidc-role-trust-policy.json) as a starting point, replace the example AWS account ID `123456789012` before creating the role.
 
 ## Related documentation
 
