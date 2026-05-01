@@ -6,4 +6,8 @@ A small **Node.js** process that runs **beside** the API and uses the **same Pos
 - **Packaged** with [`Dockerfile`](./Dockerfile); Compose starts it after migrations—see [`docker/README.md`](../docker/README.md).
 - **API** creates `pending` rows; this worker advances them—see [`app/README.md`](../app/README.md).
 
-Behavior is covered from the app repo by tests that import this module (under [`app/test/`](../app/test/README.md)).
+Behavior is covered by this package's own Node test suite under [`test/`](./test/). Run it from `worker/` with:
+
+```bash
+npm test
+```

@@ -36,8 +36,12 @@ jobs:
         working-directory: ./worker
         run: npm ci
 
-      - name: Run tests
+      - name: Run app tests
         working-directory: ./app
+        run: npm test
+
+      - name: Run worker tests
+        working-directory: ./worker
         run: npm test
 
       - name: Run lint

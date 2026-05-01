@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { processPendingDeployments } = require('../../worker/src/worker');
+const { processPendingDeployments } = require('../src/worker');
 
 const logger = {
   log() {},

@@ -4,7 +4,8 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "start": "node src/worker.js"
+    "start": "node src/worker.js",
+    "test": "node --test"
   },
   "dependencies": {
     "pg": "^8.20.0"
