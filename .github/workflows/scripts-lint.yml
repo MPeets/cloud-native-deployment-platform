@@ -24,9 +24,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
 
-      - name: Install pylint
-        run: pip install pylint
+      - name: Install script deps and pylint
+        run: pip install -r scripts/requirements.txt pylint
 
       - name: Lint scripts
         run: python -m pylint scripts/
