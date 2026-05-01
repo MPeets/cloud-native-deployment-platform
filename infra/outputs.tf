@@ -24,7 +24,7 @@ output "rds_endpoint" {
 
 output "database_url_secret_arn" {
   description = "Secrets Manager secret ARN used by ECS tasks for DATABASE_URL."
-  value       = local.database_url_secret_arn != "" ? local.database_url_secret_arn : null
+  value       = local.use_database_url_secret ? local.database_url_secret_arn : null
 }
 
 output "nat_gateway_id" {

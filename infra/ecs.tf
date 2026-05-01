@@ -1,8 +1,9 @@
 locals {
   external_database_url_secret_arn = var.database_url_secret_arn != null ? trimspace(var.database_url_secret_arn) : ""
   managed_database_url_secret_arn  = var.enable_rds ? aws_secretsmanager_secret.database_url[0].arn : ""
+  use_database_url_secret          = local.external_database_url_secret_arn != "" || var.enable_rds
   database_url_secret_arn          = local.external_database_url_secret_arn != "" ? local.external_database_url_secret_arn : local.managed_database_url_secret_arn
-  database_url_secrets = local.database_url_secret_arn != "" ? [
+  database_url_secrets = local.use_database_url_secret ? [
     {
       name      = "DATABASE_URL"
       valueFrom = local.database_url_secret_arn
@@ -214,7 +215,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
 }
 
 resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
-  count = var.enable_ecs && local.database_url_secret_arn != "" ? 1 : 0
+  count = var.enable_ecs && local.use_database_url_secret ? 1 : 0
 
   name = "read-database-url-secret"
   role = aws_iam_role.ecs_task_execution[0].id
