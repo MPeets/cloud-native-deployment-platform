@@ -23,6 +23,7 @@ jobs:
       TF_VAR_ami_id: ${{ vars.TF_AMI_ID }}
       TF_VAR_docker_image: "${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.event.workflow_run.head_sha }}"
       TF_VAR_worker_image: "${{ secrets.DOCKERHUB_USERNAME }}/devops-worker:${{ github.event.workflow_run.head_sha }}"
+      TF_VAR_database_url_secret_arn: ${{ secrets.TF_DATABASE_URL_SECRET_ARN }}
       TF_VAR_ssh_allowed_cidrs: ${{ secrets.TF_SSH_ALLOWED_CIDRS }}
       TF_VAR_aws_region: ${{ vars.TF_AWS_REGION }}
       TF_VAR_enable_ecs: ${{ vars.TF_ENABLE_ECS }}

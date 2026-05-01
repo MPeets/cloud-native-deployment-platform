@@ -10,6 +10,7 @@ Keeping backend bootstrap resources out of the main root avoids Terraform trying
 ## Current status (what this stack does today)
 
 - **Primary runtime:** **ECS on Fargate** is the default (`enable_ecs = true`). API and worker tasks run in **private subnets** without public IPs by default (`ecs_assign_public_ip = false`). Traffic enters through an **Application Load Balancer** in public subnets (HTTP port 80) and only targets the API service.
+- **Database:** **PostgreSQL RDS** is enabled by default (`enable_rds = true`) using the small `db.t4g.micro` instance class, private subnets, encrypted storage, and a generated `DATABASE_URL` secret for ECS.
 - **Legacy runtime:** **EC2 + Docker + systemd** is opt-in only (`enable_ec2 = false` by default) for debugging; it is not the main deployment path.
 - **Networking:** A dedicated **VPC** with two public and two **private** subnets (defaults in `variables.tf`), one **NAT gateway**, and **interface/gateway VPC endpoints** for ECR, CloudWatch Logs, and S3 when ECS is enabled.
 - **Remote state:** The main root uses the **S3 backend** defined in [`backend.tf`](./backend.tf) (bucket name, state key, region, encryption, and locking). If you fork the repo or use another AWS account, align `bootstrap/variables.tf` (or your bootstrap inputs), `backend.tf`, and any CI variables with **your** bucket and region.
@@ -29,6 +30,9 @@ Then edit `terraform.tfvars` and set:
 - `ssh_allowed_cidrs` to your public IPv4 `/32` (needed when `enable_ec2` is true for SSH; ECS-only path does not rely on this for the ALB)
 - `enable_ecs = true` for the ECS/Fargate runtime (already the default in `variables.tf`)
 - `enable_ec2 = false` unless you need the legacy EC2 Docker/systemd runtime for debugging
+- `enable_rds = true` to create the private PostgreSQL database; set `false` only when using an external database
+- `database_url_secret_arn` only when bringing your own database secret instead of the managed RDS database
+- `rds_instance_class`, `rds_allocated_storage`, `rds_backup_retention_days`, and `rds_deletion_protection` if the sample defaults need to change
 - `ecs_assign_public_ip = false` so ECS tasks run without public IPs in private subnets
 - `vpc_cidr`, `public_subnet_cidrs`, and `private_subnet_cidrs` if the default network ranges overlap with an existing environment
 - `enable_github_incident_logs_reader_role` — leave `true` to create the read-only CloudWatch role for incident reports; set `false` if you do not want that role
@@ -114,6 +118,8 @@ This stage fronts ECS tasks with an Application Load Balancer:
 - Public traffic enters via ALB (HTTP port 80) and routes only to the API service.
 - The ALB runs in the custom public subnets.
 - API and worker ECS tasks run in the custom private subnets without public IPs.
+- API and worker tasks receive `DATABASE_URL` from Secrets Manager. By default Terraform creates this secret from the managed RDS endpoint; `database_url_secret_arn` overrides it for external databases.
+- PostgreSQL RDS runs in the private subnets and only accepts port 5432 from the ECS task security group.
 - Private ECS tasks use VPC endpoints for ECR, S3, and CloudWatch Logs traffic.
 - NAT egress remains available for other outbound internet access.
 - Task security group allows app traffic only from the ALB security group; the worker has no load balancer attachment.
@@ -126,6 +132,7 @@ This stage fronts ECS tasks with an Application Load Balancer:
 - Worker service capacity is configurable via `ecs_worker_desired_count` (default `1`).
 - ECS task size is configurable via `ecs_task_cpu` (default `256`) and `ecs_task_memory` (default `512`).
 - ECS log retention is configurable via `ecs_log_retention_days` (default `7`).
+- RDS defaults favor the smallest demo footprint: `db.t4g.micro`, 20 GiB encrypted storage, no automated backup retention, and deletion protection off.
 
 ## Network baseline
 
@@ -147,6 +154,7 @@ After a successful apply (with ECS enabled), these are the outputs people and au
 | Output | Meaning |
 |--------|---------|
 | `alb_dns_name` | Public DNS name of the load balancer (main HTTP entry point for the API). |
+| `rds_endpoint`, `database_url_secret_arn` | Managed PostgreSQL endpoint and the Secrets Manager ARN injected into ECS tasks. |
 | `github_actions_incident_logs_reader_role_arn` | ARN to paste into GitHub as `AWS_INCIDENT_LOGS_READER_ROLE_ARN` when the incident-logs role is created. |
 | `vpc_id`, `public_subnet_ids`, `private_subnet_ids` | Network identifiers for extensions or troubleshooting. |
 | `nat_gateway_id`, `vpc_endpoint_ids` | NAT and VPC endpoint resources when ECS is on. |
@@ -157,3 +165,4 @@ After a successful apply (with ECS enabled), these are the outputs people and au
 - Run these commands from the `infra` directory.
 - Run bootstrap commands from `infra/bootstrap`.
 - If the bootstrap `state_bucket_name` changes, update the bucket name in `backend.tf` to match.
+- The managed RDS password and generated `DATABASE_URL` secret value are represented in Terraform state; keep the S3 backend private, encrypted, and access-controlled.

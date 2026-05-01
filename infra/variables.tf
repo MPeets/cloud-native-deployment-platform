@@ -18,6 +18,12 @@ variable "worker_image" {
   description = "Container image for the ECS background worker. Defaults to docker_image with devops-api replaced by devops-worker."
 }
 
+variable "database_url_secret_arn" {
+  type        = string
+  default     = null
+  description = "Optional AWS Secrets Manager secret ARN containing the DATABASE_URL value for ECS tasks. When unset and enable_rds is true, Terraform creates one from the managed RDS instance."
+}
+
 variable "key_name" {
   type    = string
   default = "devops-key"
@@ -84,6 +90,48 @@ variable "ecs_log_retention_days" {
 variable "ecs_assign_public_ip" {
   type    = bool
   default = false
+}
+
+variable "enable_rds" {
+  type        = bool
+  default     = true
+  description = "Create the managed PostgreSQL database used by the API and worker."
+}
+
+variable "rds_instance_class" {
+  type        = string
+  default     = "db.t4g.micro"
+  description = "Small PostgreSQL RDS instance class for the sample environment."
+}
+
+variable "rds_allocated_storage" {
+  type        = number
+  default     = 20
+  description = "Allocated PostgreSQL storage in GiB."
+}
+
+variable "rds_database_name" {
+  type        = string
+  default     = "devops"
+  description = "Initial PostgreSQL database name."
+}
+
+variable "rds_username" {
+  type        = string
+  default     = "devops"
+  description = "PostgreSQL master username."
+}
+
+variable "rds_backup_retention_days" {
+  type        = number
+  default     = 0
+  description = "RDS automated backup retention in days. Zero keeps the sample database cheapest."
+}
+
+variable "rds_deletion_protection" {
+  type        = bool
+  default     = false
+  description = "Enable deletion protection for the PostgreSQL instance."
 }
 
 variable "vpc_cidr" {

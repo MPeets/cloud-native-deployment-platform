@@ -1,4 +1,13 @@
 locals {
+  external_database_url_secret_arn = var.database_url_secret_arn != null ? trimspace(var.database_url_secret_arn) : ""
+  managed_database_url_secret_arn  = var.enable_rds ? aws_secretsmanager_secret.database_url[0].arn : ""
+  database_url_secret_arn          = local.external_database_url_secret_arn != "" ? local.external_database_url_secret_arn : local.managed_database_url_secret_arn
+  database_url_secrets = local.database_url_secret_arn != "" ? [
+    {
+      name      = "DATABASE_URL"
+      valueFrom = local.database_url_secret_arn
+    }
+  ] : []
   worker_image = var.worker_image != null && var.worker_image != "" ? var.worker_image : replace(var.docker_image, "/devops-api:", "/devops-worker:")
 }
 
@@ -204,6 +213,24 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
+  count = var.enable_ecs && local.database_url_secret_arn != "" ? 1 : 0
+
+  name = "read-database-url-secret"
+  role = aws_iam_role.ecs_task_execution[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "secretsmanager:GetSecretValue"
+        Resource = local.database_url_secret_arn
+      }
+    ]
+  })
+}
+
 resource "aws_ecs_task_definition" "app" {
   count = var.enable_ecs ? 1 : 0
 
@@ -215,27 +242,35 @@ resource "aws_ecs_task_definition" "app" {
   execution_role_arn       = aws_iam_role.ecs_task_execution[0].arn
 
   container_definitions = jsonencode([
-    {
-      name      = "devops-api"
-      image     = var.docker_image
-      essential = true
-      portMappings = [
-        {
-          containerPort = var.app_port
-          hostPort      = var.app_port
-          protocol      = "tcp"
+    merge(
+      {
+        name      = "devops-api"
+        image     = var.docker_image
+        essential = true
+        portMappings = [
+          {
+            containerPort = var.app_port
+            hostPort      = var.app_port
+            protocol      = "tcp"
+          }
+        ]
+        logConfiguration = {
+          logDriver = "awslogs"
+          options = {
+            awslogs-group         = aws_cloudwatch_log_group.ecs[0].name
+            awslogs-region        = var.aws_region
+            awslogs-stream-prefix = "app"
+          }
         }
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.ecs[0].name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "app"
-        }
-      }
-    }
+      },
+      length(local.database_url_secrets) > 0 ? { secrets = local.database_url_secrets } : {}
+    )
   ])
+
+  depends_on = [
+    aws_iam_role_policy.ecs_task_execution_secrets,
+    aws_secretsmanager_secret_version.database_url,
+  ]
 }
 
 resource "aws_ecs_task_definition" "worker" {
@@ -249,20 +284,28 @@ resource "aws_ecs_task_definition" "worker" {
   execution_role_arn       = aws_iam_role.ecs_task_execution[0].arn
 
   container_definitions = jsonencode([
-    {
-      name      = "devops-worker"
-      image     = local.worker_image
-      essential = true
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.ecs[0].name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "worker"
+    merge(
+      {
+        name      = "devops-worker"
+        image     = local.worker_image
+        essential = true
+        logConfiguration = {
+          logDriver = "awslogs"
+          options = {
+            awslogs-group         = aws_cloudwatch_log_group.ecs[0].name
+            awslogs-region        = var.aws_region
+            awslogs-stream-prefix = "worker"
+          }
         }
-      }
-    }
+      },
+      length(local.database_url_secrets) > 0 ? { secrets = local.database_url_secrets } : {}
+    )
   ])
+
+  depends_on = [
+    aws_iam_role_policy.ecs_task_execution_secrets,
+    aws_secretsmanager_secret_version.database_url,
+  ]
 }
 
 resource "aws_ecs_service" "app" {

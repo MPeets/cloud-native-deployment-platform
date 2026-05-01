@@ -42,6 +42,7 @@ Workflows assume an IAM role via **OIDC**—no long-lived AWS access keys stored
 
 **Secrets:**
 
+- `TF_DATABASE_URL_SECRET_ARN` — optional ARN of an existing AWS Secrets Manager `DATABASE_URL` secret; leave unset when Terraform creates RDS
 - `TF_SSH_ALLOWED_CIDRS` — JSON array of CIDRs for SSH when EC2 is enabled, e.g. `["203.0.113.10/32"]`
 - `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` — Docker Hub login for building and pushing the API and worker images (see [`ci.yml`](.github/workflows/ci.yml))
 

@@ -18,6 +18,15 @@ output "private_subnet_ids" {
   value = values(aws_subnet.private)[*].id
 }
 
+output "rds_endpoint" {
+  value = var.enable_rds ? aws_db_instance.postgres[0].address : null
+}
+
+output "database_url_secret_arn" {
+  description = "Secrets Manager secret ARN used by ECS tasks for DATABASE_URL."
+  value       = local.database_url_secret_arn != "" ? local.database_url_secret_arn : null
+}
+
 output "nat_gateway_id" {
   value = aws_nat_gateway.app.id
 }
