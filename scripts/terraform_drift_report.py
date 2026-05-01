@@ -52,6 +52,36 @@ def _normalize_action(actions: list[str]) -> str:
     return "+".join(actions) if actions else "unknown"
 
 
+def _actions_from_ui_action(action: str) -> list[str]:
+    """Convert Terraform plan -json UI actions to plan JSON action arrays."""
+    if action == "replace":
+        return ["delete", "create"]
+    return [action]
+
+
+def _planned_change_event_to_resource_change(event: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Convert one Terraform JSON UI planned_change event into plan JSON shape."""
+    change = event.get("change", {})
+    if not isinstance(change, dict):
+        return None
+    resource = change.get("resource", {})
+    if not isinstance(resource, dict):
+        return None
+
+    action = str(change.get("action", "unknown"))
+    address = str(resource.get("addr") or resource.get("address") or "(unknown)")
+    mode = "data" if address.startswith("data.") else "managed"
+    return {
+        "address": address,
+        "mode": mode,
+        "type": str(resource.get("resource_type") or resource.get("type") or "(unknown)"),
+        "provider_name": str(
+            resource.get("provider_name") or resource.get("implied_provider") or "(unknown)"
+        ),
+        "change": {"actions": _actions_from_ui_action(action)},
+    }
+
+
 def extract_drift_changes(plan: dict[str, Any]) -> list[DriftChange]:
     """Return managed resource changes that represent drift from desired state."""
     changes: list[DriftChange] = []
@@ -74,6 +104,34 @@ def extract_drift_changes(plan: dict[str, Any]) -> list[DriftChange]:
             )
         )
     return changes
+
+
+def _parse_plan_json_text(raw: str) -> dict[str, Any]:
+    """Parse Terraform show JSON or line-delimited terraform plan -json UI events."""
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        resource_changes: list[dict[str, Any]] = []
+        for line_number, line in enumerate(raw.splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Terraform JSON event on line {line_number} is invalid: {exc}"
+                ) from exc
+            if not isinstance(event, dict):
+                continue
+            if event.get("type") == "planned_change":
+                resource_change = _planned_change_event_to_resource_change(event)
+                if resource_change is not None:
+                    resource_changes.append(resource_change)
+        return {"resource_changes": resource_changes}
+
+    if not isinstance(parsed, dict):
+        raise ValueError("Terraform plan JSON must be an object or JSON event stream")
+    return parsed
 
 
 def format_drift_report(changes: list[DriftChange]) -> str:
@@ -105,54 +163,24 @@ def _load_plan_json(path: Optional[Path]) -> dict[str, Any]:
     """Load Terraform plan JSON from a path or stdin."""
     try:
         raw = path.read_text(encoding="utf-8") if path and str(path) != "-" else sys.stdin.read()
-        parsed = json.loads(raw)
     except OSError as exc:
         source = str(path) if path else "stdin"
         raise ValueError(f"could not read {source}: {exc}") from exc
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"input is not valid JSON: {exc}") from exc
-    if not isinstance(parsed, dict):
-        raise ValueError("Terraform plan JSON must be an object")
-    return parsed
-
-
-def _run_checked_json_command(cmd: list[str], *, cwd: Path) -> dict[str, Any]:
-    """Run a command that emits a single JSON object on stdout."""
-    try:
-        proc = subprocess.run(
-            cmd,
-            cwd=cwd,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-    except OSError as exc:
-        raise ValueError(f"could not run {' '.join(cmd)}: {exc}") from exc
-    if proc.returncode != 0:
-        detail = proc.stderr.strip() or proc.stdout.strip()
-        raise ValueError(f"{' '.join(cmd)} failed with exit {proc.returncode}: {detail}")
-    try:
-        parsed = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{' '.join(cmd)} did not return valid JSON: {exc}") from exc
-    if not isinstance(parsed, dict):
-        raise ValueError(f"{' '.join(cmd)} JSON output must be an object")
-    return parsed
+    return _parse_plan_json_text(raw)
 
 
 def run_terraform_plan(
     *,
     terraform_dir: Path,
     terraform_bin: str,
-    plan_out: Path,
 ) -> TerraformPlanResult:
     """Run Terraform plan and return detailed JSON when Terraform reports changes."""
     plan_cmd = [
         terraform_bin,
         "plan",
         "-detailed-exitcode",
+        "-json",
         "-lock-timeout=10m",
-        f"-out={plan_out}",
     ]
     try:
         proc = subprocess.run(
@@ -170,8 +198,7 @@ def run_terraform_plan(
         detail = proc.stderr.strip() or proc.stdout.strip()
         raise ValueError(f"terraform plan failed with exit {proc.returncode}: {detail}")
 
-    show_cmd = [terraform_bin, "show", "-json", str(plan_out)]
-    plan = _run_checked_json_command(show_cmd, cwd=terraform_dir)
+    plan = _parse_plan_json_text(proc.stdout)
     return TerraformPlanResult(exit_code=EXIT_DRIFT_DETECTED, plan=plan)
 
 
@@ -208,12 +235,6 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help="Terraform executable to run (default: terraform).",
     )
     parser.add_argument(
-        "--plan-out",
-        default=".terraform-drift-report.tfplan",
-        metavar="PATH",
-        help="Plan file path, relative to --terraform-dir unless absolute.",
-    )
-    parser.add_argument(
         "-o",
         "--output",
         metavar="PATH",
@@ -228,7 +249,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     plan_path = Path(args.plan_json) if args.plan_json else None
     output_path = Path(args.output) if args.output else None
     terraform_dir = Path(args.terraform_dir)
-    plan_out = Path(args.plan_out)
 
     try:
         if plan_path is not None:
@@ -237,7 +257,6 @@ def main(argv: Optional[list[str]] = None) -> int:
             result = run_terraform_plan(
                 terraform_dir=terraform_dir,
                 terraform_bin=args.terraform_bin,
-                plan_out=plan_out,
             )
             if result.plan is None:
                 _write_report(format_drift_report([]), output_path)
