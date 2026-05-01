@@ -2,7 +2,8 @@
 """Fetch CloudWatch Logs for an incident window and emit structured output.
 
 Companion to ``health_check.py`` (live checks); this supports post-incident review.
-Pulls paginated events, classifies each line by log level, and prints JSON or Markdown.
+Pulls paginated events, classifies each line by level, and writes JSON or Markdown
+to stdout or a file path.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 import boto3
@@ -133,6 +135,7 @@ def build_incident_report(inp: IncidentReportInput) -> dict[str, Any]:
             }
         )
     summary = {lvl: len(by_level[lvl]) for lvl in _LEVEL_KEYS}
+    total_events = len(inp.events)
     return {
         "incident_report_version": 1,
         "generated_at": gen.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -141,6 +144,7 @@ def build_incident_report(inp: IncidentReportInput) -> dict[str, Any]:
         "start_ms": inp.window.start_ms,
         "end_ms": inp.window.end_ms,
         "truncated": inp.truncated,
+        "total_events": total_events,
         "summary": summary,
         "by_level": by_level,
     }
@@ -156,6 +160,7 @@ def format_report_markdown(report: dict[str, Any]) -> str:
         f"- **Region**: `{report['region']}`",
         f"- **Window (epoch ms)**: `{report['start_ms']}` → `{report['end_ms']}`",
         f"- **Truncated (cap hit)**: {report['truncated']}",
+        f"- **Total lines**: {report['total_events']}",
         "",
         "## Summary",
         "",
@@ -180,6 +185,21 @@ def format_report_markdown(report: dict[str, Any]) -> str:
             lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_report_body(report: dict[str, Any], fmt: str) -> str:
+    """Serialize the incident report for stdout or a file."""
+    if fmt == "markdown":
+        return format_report_markdown(report)
+    return json.dumps(report, indent=2) + "\n"
+
+
+def _emit_report_text(body: str, output_path: Optional[Path]) -> None:
+    """Write UTF-8 text to ``output_path`` or print to stdout without adding an extra newline."""
+    if output_path is not None:
+        output_path.write_text(body, encoding="utf-8", newline="\n")
+    else:
+        print(body, end="")
 
 
 def _parse_since(since: str, *, now: Optional[datetime] = None) -> tuple[datetime, datetime]:
@@ -250,7 +270,7 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Pull logs from a CloudWatch log group over a time window. "
-            "Groups lines by level (ERROR / WARN / INFO) and prints JSON or Markdown."
+            "Groups lines by level (ERROR / WARN / INFO) and writes JSON or Markdown."
         ),
     )
     parser.add_argument(
@@ -301,6 +321,12 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         default="json",
         help="Incident report output format (default json)",
     )
+    parser.add_argument(
+        "-o",
+        "--output",
+        metavar="PATH",
+        help="Write report to this path (UTF-8) instead of stdout",
+    )
     args = parser.parse_args(argv)
     modes = int(bool(args.since)) + int(bool(args.time_from or args.time_to))
     if modes == 0:
@@ -315,8 +341,9 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    """Entry point: fetch logs, classify by level, print JSON or Markdown."""
+    """Entry point: fetch logs, classify by level, write JSON or Markdown."""
     args = _parse_args(argv)
+    out_path = Path(args.output) if args.output else None
     try:
         window = resolve_time_window_ms(
             since=args.since,
@@ -328,8 +355,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 1
 
     if args.dry_run:
-        print(f"log_group={args.log_group!r} region={args.region!r}")
-        print(f"start_ms={window.start_ms} end_ms={window.end_ms}")
+        lines = (
+            f"log_group={args.log_group!r} region={args.region!r}\n"
+            f"start_ms={window.start_ms} end_ms={window.end_ms}\n"
+        )
+        try:
+            _emit_report_text(lines, out_path)
+        except OSError as exc:
+            path_msg = args.output or "stdout"
+            print(f"error: could not write {path_msg}: {exc}", file=sys.stderr)
+            return 1
         return 0
 
     cap: Optional[int] = None if args.max_events == 0 else args.max_events
@@ -354,10 +389,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             truncated=truncated,
         )
     )
-    if args.format == "markdown":
-        print(format_report_markdown(report), end="")
-    else:
-        print(json.dumps(report, indent=2))
+    body = _render_report_body(report, args.format)
+    try:
+        _emit_report_text(body, out_path)
+    except OSError as exc:
+        path_msg = args.output or "stdout"
+        print(f"error: could not write {path_msg}: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 
