@@ -1,0 +1,94 @@
+name: Incident log report
+
+# Manual on-demand pull from CloudWatch (least-privilege OIDC role; see Terraform output
+# github_actions_incident_logs_reader_role_arn → repo variable AWS_INCIDENT_LOGS_READER_ROLE_ARN).
+
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "Time window ending now (e.g. 30m, 2h, 1d)"
+        required: true
+        default: "30m"
+        type: string
+      log_group:
+        description: "CloudWatch log group name"
+        required: true
+        default: "/ecs/devops-api"
+        type: string
+      max_events:
+        description: "Max events to fetch (0 = no cap; keep low for Actions)"
+        required: true
+        default: "10000"
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check reader role is configured
+        env:
+          ROLE_ARN: ${{ vars.AWS_INCIDENT_LOGS_READER_ROLE_ARN }}
+        run: |
+          if [ -z "$ROLE_ARN" ]; then
+            echo "::error::Set repository variable AWS_INCIDENT_LOGS_READER_ROLE_ARN to Terraform output github_actions_incident_logs_reader_role_arn."
+            exit 1
+          fi
+
+      - name: Resolve AWS region
+        id: aws_region
+        run: |
+          R="${TF_AWS_REGION:-eu-north-1}"
+          echo "region=$R" >> "$GITHUB_OUTPUT"
+          echo "AWS_REGION=$R" >> "$GITHUB_ENV"
+        env:
+          TF_AWS_REGION: ${{ vars.TF_AWS_REGION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_INCIDENT_LOGS_READER_ROLE_ARN }}
+          aws-region: ${{ steps.aws_region.outputs.region }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Generate Markdown report
+        run: |
+          python scripts/incident_log_report.py \
+            --region "${{ steps.aws_region.outputs.region }}" \
+            --log-group "${{ inputs.log_group }}" \
+            --since "${{ inputs.since }}" \
+            --max-events "${{ inputs.max_events }}" \
+            --format markdown \
+            -o incident-report.md
+
+      - name: Add report to job summary
+        run: |
+          {
+            echo "## Incident log report"
+            echo ""
+            echo "Window: \`${{ inputs.since }}\` · Log group: \`${{ inputs.log_group }}\`"
+            echo ""
+            cat incident-report.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Markdown artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: incident-log-report
+          path: incident-report.md

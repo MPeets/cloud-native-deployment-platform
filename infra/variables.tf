@@ -89,3 +89,15 @@ variable "private_subnet_cidrs" {
   type    = list(string)
   default = ["10.0.101.0/24", "10.0.102.0/24"]
 }
+
+variable "enable_github_incident_logs_reader_role" {
+  type        = bool
+  default     = true
+  description = "Least-privilege IAM role (OIDC) for GitHub Actions to run incident log reports against the ECS log group."
+}
+
+variable "github_actions_oidc_repository" {
+  type        = string
+  default     = "MPeets/cloud-native-deployment-platform"
+  description = "Restricts GitHub OIDC sub claim to repo:ORG/NAME:* (no repo: prefix here)."
+}
