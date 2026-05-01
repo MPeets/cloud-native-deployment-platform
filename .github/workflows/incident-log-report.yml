@@ -80,9 +80,7 @@ jobs:
       - name: Add report to job summary
         run: |
           {
-            echo "## Incident log report"
-            echo ""
-            echo "Window: \`${{ inputs.since }}\` · Log group: \`${{ inputs.log_group }}\`"
+            echo "_Workflow inputs:_ \`${{ inputs.since }}\` · \`${{ inputs.log_group }}\` · max events \`${{ inputs.max_events }}\`"
             echo ""
             cat incident-report.md
           } >> "$GITHUB_STEP_SUMMARY"
