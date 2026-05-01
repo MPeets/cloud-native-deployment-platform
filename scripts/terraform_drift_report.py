@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -26,6 +27,14 @@ class DriftChange:
     action: str
     resource_type: str
     provider_name: str
+
+
+@dataclass(frozen=True)
+class TerraformPlanResult:
+    """Result of a Terraform plan run plus JSON details when changes exist."""
+
+    exit_code: int
+    plan: Optional[dict[str, Any]]
 
 
 def _normalize_action(actions: list[str]) -> str:
@@ -95,7 +104,7 @@ def format_drift_report(changes: list[DriftChange]) -> str:
 def _load_plan_json(path: Optional[Path]) -> dict[str, Any]:
     """Load Terraform plan JSON from a path or stdin."""
     try:
-        raw = path.read_text(encoding="utf-8") if path else sys.stdin.read()
+        raw = path.read_text(encoding="utf-8") if path and str(path) != "-" else sys.stdin.read()
         parsed = json.loads(raw)
     except OSError as exc:
         source = str(path) if path else "stdin"
@@ -105,6 +114,65 @@ def _load_plan_json(path: Optional[Path]) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("Terraform plan JSON must be an object")
     return parsed
+
+
+def _run_checked_json_command(cmd: list[str], *, cwd: Path) -> dict[str, Any]:
+    """Run a command that emits a single JSON object on stdout."""
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise ValueError(f"could not run {' '.join(cmd)}: {exc}") from exc
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip()
+        raise ValueError(f"{' '.join(cmd)} failed with exit {proc.returncode}: {detail}")
+    try:
+        parsed = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{' '.join(cmd)} did not return valid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{' '.join(cmd)} JSON output must be an object")
+    return parsed
+
+
+def run_terraform_plan(
+    *,
+    terraform_dir: Path,
+    terraform_bin: str,
+    plan_out: Path,
+) -> TerraformPlanResult:
+    """Run Terraform plan and return detailed JSON when Terraform reports changes."""
+    plan_cmd = [
+        terraform_bin,
+        "plan",
+        "-detailed-exitcode",
+        "-lock-timeout=10m",
+        f"-out={plan_out}",
+    ]
+    try:
+        proc = subprocess.run(
+            plan_cmd,
+            cwd=terraform_dir,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise ValueError(f"could not run terraform plan in {terraform_dir}: {exc}") from exc
+    if proc.returncode == EXIT_NO_DRIFT:
+        return TerraformPlanResult(exit_code=EXIT_NO_DRIFT, plan=None)
+    if proc.returncode != EXIT_DRIFT_DETECTED:
+        detail = proc.stderr.strip() or proc.stdout.strip()
+        raise ValueError(f"terraform plan failed with exit {proc.returncode}: {detail}")
+
+    show_cmd = [terraform_bin, "show", "-json", str(plan_out)]
+    plan = _run_checked_json_command(show_cmd, cwd=terraform_dir)
+    return TerraformPlanResult(exit_code=EXIT_DRIFT_DETECTED, plan=plan)
 
 
 def _write_report(body: str, output_path: Optional[Path]) -> None:
@@ -125,7 +193,25 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--plan-json",
         metavar="PATH",
-        help="Path to Terraform plan JSON. Reads stdin when omitted.",
+        help="Path to Terraform plan JSON, or '-' for stdin. When omitted, Terraform is run.",
+    )
+    parser.add_argument(
+        "--terraform-dir",
+        default="infra",
+        metavar="PATH",
+        help="Terraform working directory (default: infra).",
+    )
+    parser.add_argument(
+        "--terraform-bin",
+        default="terraform",
+        metavar="PATH",
+        help="Terraform executable to run (default: terraform).",
+    )
+    parser.add_argument(
+        "--plan-out",
+        default=".terraform-drift-report.tfplan",
+        metavar="PATH",
+        help="Plan file path, relative to --terraform-dir unless absolute.",
     )
     parser.add_argument(
         "-o",
@@ -141,9 +227,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = _parse_args(argv)
     plan_path = Path(args.plan_json) if args.plan_json else None
     output_path = Path(args.output) if args.output else None
+    terraform_dir = Path(args.terraform_dir)
+    plan_out = Path(args.plan_out)
 
     try:
-        plan = _load_plan_json(plan_path)
+        if plan_path is not None:
+            plan = _load_plan_json(plan_path)
+        else:
+            result = run_terraform_plan(
+                terraform_dir=terraform_dir,
+                terraform_bin=args.terraform_bin,
+                plan_out=plan_out,
+            )
+            if result.plan is None:
+                _write_report(format_drift_report([]), output_path)
+                return EXIT_NO_DRIFT
+            plan = result.plan
         changes = extract_drift_changes(plan)
         _write_report(format_drift_report(changes), output_path)
     except ValueError as exc:
