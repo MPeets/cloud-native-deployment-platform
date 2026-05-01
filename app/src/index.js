@@ -1,6 +1,6 @@
 const { createApp } = require('./app');
 const { createDeploymentsRepository } = require('./deploymentsRepository');
-const { initializeDatabase, isDatabaseReady, pool } = require('./db');
+const { checkConnection, isDatabaseReady, pool } = require('./db');
 
 const port = process.env.PORT || 3000;
 
@@ -14,8 +14,8 @@ async function startServer() {
     console.log(`Server running on port ${port}`);
   });
 
-  initializeDatabase().catch((error) => {
-    console.error('Database initialization failed', error);
+  checkConnection().catch((error) => {
+    console.error('Database connection check failed', error);
   });
 }
 

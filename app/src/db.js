@@ -6,17 +6,16 @@ const connectionString =
 
 const pool = new Pool({ connectionString });
 
-async function initializeDatabase() {
+async function checkConnection() {
   await pool.query('SELECT 1');
 }
 
 async function isDatabaseReady() {
-  await initializeDatabase();
-  await pool.query('SELECT 1');
+  await checkConnection();
 }
 
 module.exports = {
-  initializeDatabase,
+  checkConnection,
   isDatabaseReady,
   pool,
 };
