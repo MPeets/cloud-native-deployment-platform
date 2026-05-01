@@ -1,35 +1,46 @@
 # Kubernetes packaging
 
-This directory shows two complementary ways to run the same API on Kubernetes: **plain manifests** for clarity, and a **Helm chart** for installable, configurable deployments.
+This directory shows two complementary ways to run the same API on Kubernetes: **plain manifests** for a small, readable baseline, and a **Helm chart** for installable, configurable deployments (including HPA and a ServiceAccount).
 
-The cloud path for this repo is **ECS Fargate + ALB**, provisioned by Terraform (`infra/`). Nothing here duplicates that automation. These manifests are deliberate **skills evidence** — useful for local clusters (kind, minikube, Docker Desktop Kubernetes), or a future migration to EKS/GKE without wedging Helm into Terraform today.
+## How this relates to the rest of the repo
+
+The **primary cloud path** in this repository is **ECS Fargate + ALB**, provisioned by Terraform ([`infra/`](../infra/README.md)). Nothing here replaces that automation. These assets are **portable packaging**: useful on local clusters (kind, minikube, Docker Desktop Kubernetes), teaching, or a later move to managed Kubernetes **without** folding Helm into Terraform today.
+
+For a **full stack with PostgreSQL** on one machine, see [`docker/`](../docker/README.md). The YAML in `k8s/` deploys the **API container only**; it does not create a database or inject `DATABASE_URL`. Endpoints that need the database (for example **`/deployments`** and **`/ready`**) only work once you wire Postgres yourself (Secret/ConfigMap, sidecar, or external service).
 
 ## Layout
 
 ```
 k8s/
-├── manifests/           # Vanilla YAML — educational baseline
+├── README.md
+├── manifests/                    # Vanilla YAML — educational baseline
 │   ├── deployment.yaml
 │   ├── service.yaml
 │   └── ingress.yaml
-└── helm/devops-api/     # Packaged chart
-    ├── Chart.yaml
+└── helm/devops-api/
+    ├── Chart.yaml                 # chart v0.1.0, appVersion 1.0.0
     ├── values.yaml
     └── templates/
+        ├── _helpers.tpl
+        ├── deployment.yaml
+        ├── hpa.yaml              # emitted when autoscaling.enabled is true
+        ├── ingress.yaml
+        ├── service.yaml
+        └── serviceaccount.yaml   # emitted when serviceAccount.create is true
 ```
 
 ## Design choices (brief)
 
 | Area | Choice | Rationale |
 |------|--------|-----------|
-| **Replicas** | `2` | Availability over a single pod; pairs with HPA in Helm. |
-| **Image** | `mpeets/devops-api:latest` (defaults) | Aligns with CI image name; `imagePullPolicy: Always` when using floating tags. |
-| **Probes** | Liveness vs readiness on `/health` | Readiness gates traffic; shorter intervals avoid slow rollouts without hiding failures. |
-| **Resources** | Requests + limits (`100m`/128Mi → `250m`/256Mi) | Realistic guardrails for a small Node service. |
+| **Replicas** | `2` in raw manifests; Helm defaults `replicaCount: 2` | Availability over a single pod. With **autoscaling on**, the Deployment uses **`autoscaling.minReplicas`** (2) as the replica count; HPA scales between min and max. |
+| **Image** | `mpeets/devops-api:latest` (defaults) | Aligns with CI image naming; `imagePullPolicy: Always` when using floating tags. |
+| **Probes** | Liveness + readiness both hit **`/health`** | Fast “process is up” checks without a database. After you add Postgres and `DATABASE_URL`, consider **`/ready`** for **readiness** so traffic waits until the DB is reachable (matches the API’s semantics). |
+| **Resources** | Requests + limits (`100m` / 128Mi → `250m` / 256Mi) | Realistic guardrails for a small Node service. |
 | **Rollout** | `maxUnavailable: 0`, `maxSurge: 1` | Zero-downtime rolling updates where the scheduler allows. |
-| **Service** | `ClusterIP` | External access is delegated to Ingress (or NLB/Ingress Controller in cloud). |
+| **Service** | `ClusterIP`, port **80** → container **3000** | Internal cluster access; Ingress fronts port 80. |
 | **Ingress** | `ingressClassName: nginx`, host `devops-api.local` | Portable pattern; TLS block commented in raw YAML for local/dev without certs. |
-| **Helm extras** | HPA, ServiceAccount | Chart shows autoscaling and identity without cluttering the raw baseline. |
+| **Helm extras** | **HPA** (`autoscaling/v2`, CPU average **80%**, min **2** / max **5**), **ServiceAccount** | Autoscaling and pod identity without crowding the raw manifest baseline. |
 
 ## Raw manifests
 
@@ -45,7 +56,7 @@ Dry-run (no cluster changes):
 kubectl apply -f k8s/manifests/ --dry-run=client
 ```
 
-Edit names, hosts, and image references for your environment before production use.
+Edit names, hosts, image references, and (in real use) **environment / Secrets** for your environment before relying on this in production.
 
 ## Helm chart
 
@@ -76,17 +87,40 @@ helm upgrade --install demo ./k8s/helm/devops-api -n devops --create-namespace \
   --set image.pullPolicy=IfNotPresent
 ```
 
+To turn off autoscaling and use a fixed replica count from `values.yaml`:
+
+```bash
+helm upgrade --install demo ./k8s/helm/devops-api -n devops --create-namespace \
+  --set autoscaling.enabled=false \
+  --set replicaCount=2
+```
+
 ## CI validation (GitHub Actions)
 
-Workflow: [`.github/workflows/k8s-lint.yml`](../.github/workflows/k8s-lint.yml). On **push or pull_request** targeting **`main`**, runs only when files under **`k8s/`** change. It runs **helm lint**, pipes **helm template** into **kubeconform** (validates the rendered chart against a pinned Kubernetes OpenAPI schema — no cluster), then **kubeconform** again for **`k8s/manifests/*.yaml`**.
+Workflow: [`.github/workflows/k8s-lint.yml`](../.github/workflows/k8s-lint.yml).
 
-**Why paths are only `k8s/**`:** this job validates packaging YAML, not application source. Updates under `app/` or `worker/` do not mutate those files unless you edit image tags or related values here; widening paths would rerun the workflow on unrelated Node commits. Use **manual re-run** in the Actions UI after changing app behavior if you want another pass without touching `k8s/`.
+| Trigger | Scope |
+|--------|--------|
+| **push** / **pull_request** to **`main`** | Only when paths under **`k8s/**`** change. |
+| **workflow_dispatch** | Manual run anytime. |
+
+Steps (current tooling as pinned in the workflow):
+
+1. **`helm lint`** on `k8s/helm/devops-api/`.
+2. **`helm template`** piped to **kubeconform** — validates rendered chart objects against a pinned Kubernetes OpenAPI schema (**1.30.0**), no cluster required.
+3. **kubeconform** on **`k8s/manifests/deployment.yaml`**, **`service.yaml`**, **`ingress.yaml`** with the same schema version.
+
+Helm CLI in CI: **v3.14.4**. Kubeconform: **v0.6.7**.
+
+**Why paths are only `k8s/**`:** the job validates packaging YAML, not application source. Commits under `app/` or `worker/` do not touch these files unless you change image tags or values here. Use **workflow_dispatch** or a manual re-run if you want another pass without editing `k8s/`.
 
 ## Local cluster (e.g. Docker Desktop)
+
 1. Enable **Kubernetes** in Docker Desktop and wait until it is running.
 2. `kubectl config use-context docker-desktop` (or whatever `kubectl config get-contexts` shows).
-3. Install an **Ingress controller** that satisfies `ingressClassName: nginx` (e.g. **ingress-nginx** Helm chart).
+3. Install an **Ingress controller** that satisfies `ingressClassName: nginx` (for example the **ingress-nginx** Helm chart).
 4. Map the Ingress host to the loopback address your controller uses (often `127.0.0.1 devops-api.local` in the OS hosts file).
 5. Build and tag the app image if you are not pulling from a registry, then install with overrides as above.
+6. If you need a working **`/deployments`** API (or **`/ready`**), run Postgres and set **`DATABASE_URL`** on the Deployment (not included in these samples).
 
-Expect brief **503** responses from the ingress while pods are still `ContainerCreating` or failing readiness; confirm `kubectl get pods -n <ns>` shows `Running` and `READY` before calling the URL final.
+Expect brief **503** responses from the ingress while pods are still `ContainerCreating` or failing readiness; confirm `kubectl get pods -n <ns>` shows **Running** and **READY** before calling the URL again.

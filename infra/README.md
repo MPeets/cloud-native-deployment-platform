@@ -3,9 +3,18 @@
 This folder contains two Terraform roots:
 
 - `bootstrap/`: creates the S3 bucket used by Terraform remote state. This root uses local state and is only needed when the backend bucket does not exist yet.
-- `./`: deploys the application infrastructure and configures Terraform to use the S3 backend in `backend.tf` (with S3 lockfile locking).
+- `./`: deploys the application infrastructure and configures Terraform to use the S3 backend in `backend.tf` (with S3-native state locking via `use_lockfile`).
 
 Keeping backend bootstrap resources out of the main root avoids Terraform trying to manage the same bucket from the state stored in that bucket.
+
+## Current status (what this stack does today)
+
+- **Primary runtime:** **ECS on Fargate** is the default (`enable_ecs = true`). Tasks run in **private subnets** without public IPs by default (`ecs_assign_public_ip = false`). Traffic enters through an **Application Load Balancer** in public subnets (HTTP port 80).
+- **Legacy runtime:** **EC2 + Docker + systemd** is opt-in only (`enable_ec2 = false` by default) for debugging; it is not the main deployment path.
+- **Networking:** A dedicated **VPC** with two public and two **private** subnets (defaults in `variables.tf`), one **NAT gateway**, and **interface/gateway VPC endpoints** for ECR, CloudWatch Logs, and S3 when ECS is enabled.
+- **Remote state:** The main root uses the **S3 backend** defined in [`backend.tf`](./backend.tf) (bucket name, state key, region, encryption, and locking). If you fork the repo or use another AWS account, align `bootstrap/variables.tf` (or your bootstrap inputs), `backend.tf`, and any CI variables with **your** bucket and region.
+- **GitHub Actions + AWS:** Besides the usual deploy role (documented at the repo root), Terraform can create a **least-privilege OIDC IAM role** that only allows **CloudWatch Logs filter** calls against the **ECS service log group**. That supports the **Incident log report** workflow (`.github/workflows/incident-log-report.yml`). It is on by default (`enable_github_incident_logs_reader_role = true`) when ECS is enabled. After apply, set the repository variable **`AWS_INCIDENT_LOGS_READER_ROLE_ARN`** to the Terraform output **`github_actions_incident_logs_reader_role_arn`**. If you use a different GitHub repo, set **`github_actions_oidc_repository`** in `terraform.tfvars` (see below).
+- **Automation elsewhere in the repo:** **Terraform plan/apply/destroy** and **drift reporting** run from GitHub Actions; drift uses [`scripts/terraform_drift_report.py`](../scripts/terraform_drift_report.py) against this directory.
 
 ## Local config (`terraform.tfvars`)
 
@@ -17,11 +26,18 @@ cp terraform.tfvars.example terraform.tfvars
 
 Then edit `terraform.tfvars` and set:
 
-- `ssh_allowed_cidrs` to your public IPv4 `/32`
-- `enable_ecs = true` for the ECS/Fargate runtime
+- `ssh_allowed_cidrs` to your public IPv4 `/32` (needed when `enable_ec2` is true for SSH; ECS-only path does not rely on this for the ALB)
+- `enable_ecs = true` for the ECS/Fargate runtime (already the default in `variables.tf`)
 - `enable_ec2 = false` unless you need the legacy EC2 Docker/systemd runtime for debugging
 - `ecs_assign_public_ip = false` so ECS tasks run without public IPs in private subnets
 - `vpc_cidr`, `public_subnet_cidrs`, and `private_subnet_cidrs` if the default network ranges overlap with an existing environment
+- `enable_github_incident_logs_reader_role` — leave `true` to create the read-only CloudWatch role for incident reports; set `false` if you do not want that role
+- `github_actions_oidc_repository` — defaults to this template’s repo slug; **change it when you fork** so OIDC `sub` claims match your `owner/name` on GitHub
+
+Required values without usable defaults (see [`terraform.tfvars.example`](./terraform.tfvars.example)):
+
+- `docker_image` — container image the ECS task (or EC2 host) runs
+- `ami_id` — must be present in `terraform.tfvars` (see example); **used only** when `enable_ec2` is true
 
 ## First-Time Bootstrap (No Existing Backend Bucket)
 
@@ -121,6 +137,18 @@ This stack now creates a small custom network foundation:
 - VPC endpoints for ECR API, ECR Docker, CloudWatch Logs, and S3.
 
 ECS now uses the custom private subnets behind the public ALB. The legacy EC2 debug runtime uses the custom public subnet path. For higher availability, a future iteration can add one NAT gateway per Availability Zone.
+
+## Notable Terraform outputs
+
+After a successful apply (with ECS enabled), these are the outputs people and automation most often need:
+
+| Output | Meaning |
+|--------|---------|
+| `alb_dns_name` | Public DNS name of the load balancer (main HTTP entry point for the API). |
+| `github_actions_incident_logs_reader_role_arn` | ARN to paste into GitHub as `AWS_INCIDENT_LOGS_READER_ROLE_ARN` when the incident-logs role is created. |
+| `vpc_id`, `public_subnet_ids`, `private_subnet_ids` | Network identifiers for extensions or troubleshooting. |
+| `nat_gateway_id`, `vpc_endpoint_ids` | NAT and VPC endpoint resources when ECS is on. |
+| `public_ip` | Set only when `enable_ec2` is true (legacy VM). |
 
 ## Notes
 
