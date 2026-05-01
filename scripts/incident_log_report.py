@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""Fetch CloudWatch Logs for an incident window and emit a grouped incident report.
+"""Fetch CloudWatch Logs for an incident window and emit structured output.
 
-The companion to ``health_check.py``: that script answers live deployment health;
-this one supports post-incident review by pulling log events over a chosen time range.
+Companion to ``health_check.py`` (live checks); this supports post-incident review.
+Right now events are dumped as JSON with pagination handled correctly; grouping
+by log level is added in a dedicated report step.
 """
-
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
+import boto3
+from botocore.exceptions import ClientError
 from dateutil import parser as date_parser
 
 _SINCE_RE = re.compile(r"^(\d+)([smhd])$", re.IGNORECASE)
@@ -26,6 +29,53 @@ class TimeWindowMs:
 
     start_ms: int
     end_ms: int
+
+
+@dataclass(frozen=True)
+class RawLogEvent:
+    """One row from ``filter_log_events`` (message body + metadata for the report)."""
+
+    timestamp_ms: int
+    message: str
+    log_stream: str
+
+
+def fetch_log_events(
+    logs,
+    *,
+    log_group: str,
+    window: TimeWindowMs,
+    max_events: Optional[int],
+) -> tuple[list[RawLogEvent], Optional[ClientError]]:
+    """Paginate ``filter_log_events`` until the window is exhausted or ``max_events`` is reached."""
+    collected: list[RawLogEvent] = []
+    next_token: Optional[str] = None
+    try:
+        while True:
+            kwargs: dict[str, Any] = {
+                "logGroupName": log_group,
+                "startTime": window.start_ms,
+                "endTime": window.end_ms,
+            }
+            if next_token:
+                kwargs["nextToken"] = next_token
+            resp = logs.filter_log_events(**kwargs)
+            for ev in resp.get("events", ()):
+                collected.append(
+                    RawLogEvent(
+                        timestamp_ms=int(ev["timestamp"]),
+                        message=str(ev.get("message", "")),
+                        log_stream=str(ev.get("logStreamName", "")),
+                    )
+                )
+                if max_events is not None and len(collected) >= max_events:
+                    return collected, None
+            next_token = resp.get("nextToken")
+            if not next_token:
+                break
+    except ClientError as exc:
+        return [], exc
+    return collected, None
 
 
 def _parse_since(since: str, *, now: Optional[datetime] = None) -> tuple[datetime, datetime]:
@@ -95,8 +145,8 @@ def _default_region() -> str:
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Pull logs from a CloudWatch log group over a time window and "
-            "emit a grouped incident report (ERROR / WARN / INFO)."
+            "Pull logs from a CloudWatch log group over a time window. "
+            "Emits JSON with paginated raw events; level grouping is layered on next."
         ),
     )
     parser.add_argument(
@@ -131,6 +181,13 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Only validate the time window and print epoch ms; no AWS calls",
     )
+    parser.add_argument(
+        "--max-events",
+        type=int,
+        default=100_000,
+        metavar="N",
+        help="Stop after N events (0 = no cap; default 100000)",
+    )
     args = parser.parse_args(argv)
     modes = int(bool(args.since)) + int(bool(args.time_from or args.time_to))
     if modes == 0:
@@ -144,8 +201,35 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     return args
 
 
+def _raw_events_to_json_payload(
+    *,
+    log_group: str,
+    region: str,
+    window: TimeWindowMs,
+    events: list[RawLogEvent],
+    truncated: bool,
+) -> dict[str, Any]:
+    """Build a JSON-serializable dict (flat event list; level grouping comes later)."""
+    return {
+        "log_group": log_group,
+        "region": region,
+        "start_ms": window.start_ms,
+        "end_ms": window.end_ms,
+        "event_count": len(events),
+        "truncated": truncated,
+        "events": [
+            {
+                "timestamp_ms": e.timestamp_ms,
+                "log_stream": e.log_stream,
+                "message": e.message,
+            }
+            for e in events
+        ],
+    }
+
+
 def main(argv: Optional[list[str]] = None) -> int:
-    """Entry point: parse window, optionally dry-run; later emits the incident report."""
+    """Entry point: parse window, fetch CloudWatch logs with pagination, print JSON."""
     args = _parse_args(argv)
     try:
         window = resolve_time_window_ms(
@@ -162,8 +246,28 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"start_ms={window.start_ms} end_ms={window.end_ms}")
         return 0
 
-    print("error: log fetch not implemented yet (use --dry-run)", file=sys.stderr)
-    return 1
+    cap: Optional[int] = None if args.max_events == 0 else args.max_events
+    logs = boto3.client("logs", region_name=args.region)
+    events, err = fetch_log_events(
+        logs,
+        log_group=args.log_group,
+        window=window,
+        max_events=cap,
+    )
+    if err is not None:
+        print(f"error: filter_log_events failed: {err}", file=sys.stderr)
+        return 1
+
+    truncated = cap is not None and len(events) >= cap
+    payload = _raw_events_to_json_payload(
+        log_group=args.log_group,
+        region=args.region,
+        window=window,
+        events=events,
+        truncated=truncated,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
 
 
 if __name__ == "__main__":
