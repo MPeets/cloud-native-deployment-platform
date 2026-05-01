@@ -1,4 +1,7 @@
 node_modules
+__pycache__/
+*.py[cod]
+
 .env
 .aws
 **/.terraform/
@@ -6,6 +9,9 @@ node_modules
 *.tfstate.*
 *.tfplan
 crash.log
+
+# Windows: accidental file created by bad redirects (e.g. `> NUL` in Git Bash)
+/NUL
 
 # Local Terraform variable overrides (contains personal IPs, etc.)
 infra/terraform.tfvars
