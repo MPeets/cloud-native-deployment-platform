@@ -9,7 +9,7 @@ Keeping backend bootstrap resources out of the main root avoids Terraform trying
 
 ## Current status (what this stack does today)
 
-- **Primary runtime:** **ECS on Fargate** is the default (`enable_ecs = true`). Tasks run in **private subnets** without public IPs by default (`ecs_assign_public_ip = false`). Traffic enters through an **Application Load Balancer** in public subnets (HTTP port 80).
+- **Primary runtime:** **ECS on Fargate** is the default (`enable_ecs = true`). API and worker tasks run in **private subnets** without public IPs by default (`ecs_assign_public_ip = false`). Traffic enters through an **Application Load Balancer** in public subnets (HTTP port 80) and only targets the API service.
 - **Legacy runtime:** **EC2 + Docker + systemd** is opt-in only (`enable_ec2 = false` by default) for debugging; it is not the main deployment path.
 - **Networking:** A dedicated **VPC** with two public and two **private** subnets (defaults in `variables.tf`), one **NAT gateway**, and **interface/gateway VPC endpoints** for ECR, CloudWatch Logs, and S3 when ECS is enabled.
 - **Remote state:** The main root uses the **S3 backend** defined in [`backend.tf`](./backend.tf) (bucket name, state key, region, encryption, and locking). If you fork the repo or use another AWS account, align `bootstrap/variables.tf` (or your bootstrap inputs), `backend.tf`, and any CI variables with **your** bucket and region.
@@ -36,7 +36,8 @@ Then edit `terraform.tfvars` and set:
 
 Required values without usable defaults (see [`terraform.tfvars.example`](./terraform.tfvars.example)):
 
-- `docker_image` — container image the ECS task (or EC2 host) runs
+- `docker_image` — API container image the ECS task (or EC2 host) runs
+- `worker_image` — worker container image the ECS worker task runs; when omitted, Terraform derives the matching `devops-worker` tag from `docker_image`
 - `ami_id` — must be present in `terraform.tfvars` (see example); **used only** when `enable_ec2` is true
 
 ## First-Time Bootstrap (No Existing Backend Bucket)
@@ -103,25 +104,26 @@ GitHub Actions also runs this on a weekday schedule in `.github/workflows/terraf
 
 ## ECS Fargate (cloud-native runtime)
 
-This stack contains an ECS Fargate baseline (cluster + task definition + service) running the `docker_image`.
+This stack contains an ECS Fargate baseline running two services: the public API service from `docker_image` and a private background worker service from `worker_image`.
 
 To enable ECS resources, set `enable_ecs = true` in your local `terraform.tfvars`.
 The legacy EC2 Docker/systemd runtime is disabled by default. To enable it for debugging, set `enable_ec2 = true`; it runs in a custom public subnet with a public IP.
 
 This stage fronts ECS tasks with an Application Load Balancer:
 
-- Public traffic enters via ALB (HTTP port 80).
+- Public traffic enters via ALB (HTTP port 80) and routes only to the API service.
 - The ALB runs in the custom public subnets.
-- ECS tasks run in the custom private subnets without public IPs.
+- API and worker ECS tasks run in the custom private subnets without public IPs.
 - Private ECS tasks use VPC endpoints for ECR, S3, and CloudWatch Logs traffic.
 - NAT egress remains available for other outbound internet access.
-- Task security group allows app traffic only from the ALB security group.
+- Task security group allows app traffic only from the ALB security group; the worker has no load balancer attachment.
 - Service endpoint is available in Terraform output `alb_dns_name`.
 - ALB health-check path is configurable via `alb_health_check_path` (default `/`).
 - ECS deployment health tuning:
   - `deployment_minimum_healthy_percent = 100`
   - `deployment_maximum_percent = 200`
   - `ecs_health_check_grace_period_seconds` (default `60`)
+- Worker service capacity is configurable via `ecs_worker_desired_count` (default `1`).
 - ECS task size is configurable via `ecs_task_cpu` (default `256`) and `ecs_task_memory` (default `512`).
 - ECS log retention is configurable via `ecs_log_retention_days` (default `7`).
 

@@ -12,6 +12,12 @@ variable "docker_image" {
   type = string
 }
 
+variable "worker_image" {
+  type        = string
+  default     = null
+  description = "Container image for the ECS background worker. Defaults to docker_image with devops-api replaced by devops-worker."
+}
+
 variable "key_name" {
   type    = string
   default = "devops-key"
@@ -41,6 +47,11 @@ variable "app_port" {
 }
 
 variable "ecs_desired_count" {
+  type    = number
+  default = 1
+}
+
+variable "ecs_worker_desired_count" {
   type    = number
   default = 1
 }

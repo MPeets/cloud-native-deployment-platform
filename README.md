@@ -20,7 +20,7 @@ This file is the **map of the repo**. For depth, follow the links below.
 ## End-to-end flow (high level)
 
 1. **Develop** the API and worker; **tests** run in CI.
-2. **CI** builds and pushes a container image; **Terraform** (manually or via workflows) rolls that image into **ECS** behind an **ALB**.
+2. **CI** builds and pushes API and worker container images; **Terraform** (manually or via workflows) rolls the API behind an **ALB** and runs the worker as a private ECS service.
 3. **CloudWatch** collects logs; **scripts** can smoke-test the ALB, check ECS, scan recent logs, or summarize Terraform drift.
 4. **Locally**, **Compose** brings up DB + migrate + API + worker so you can work without AWS.
 
@@ -35,14 +35,15 @@ Workflows assume an IAM role via **OIDC**—no long-lived AWS access keys stored
 - `AWS_ROLE_TO_ASSUME` — ARN for the main deploy/infrastructure role
 - `TF_AWS_REGION` — e.g. `eu-north-1`
 - `TF_AMI_ID` — AMI for EC2 (still required as a Terraform variable when EC2 is disabled)
-- `TF_DOCKER_IMAGE` — image reference for Terraform (e.g. manual apply); image build workflows may derive tags from the commit
+- `TF_DOCKER_IMAGE` — API image reference for Terraform (e.g. manual apply); image build workflows may derive tags from the commit
+- `TF_WORKER_IMAGE` — worker image reference for manual Terraform workflows; defaults locally to the matching `devops-worker` tag when omitted
 - `TF_ENABLE_ECS` — `true` for Fargate
 - `TF_ENABLE_EC2` — `false` unless enabling the legacy VM path
 
 **Secrets:**
 
 - `TF_SSH_ALLOWED_CIDRS` — JSON array of CIDRs for SSH when EC2 is enabled, e.g. `["203.0.113.10/32"]`
-- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` — Docker Hub login for building and pushing the API image (see [`ci.yml`](.github/workflows/ci.yml))
+- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` — Docker Hub login for building and pushing the API and worker images (see [`ci.yml`](.github/workflows/ci.yml))
 
 **Optional (incident log workflow):** set `AWS_INCIDENT_LOGS_READER_ROLE_ARN` from Terraform output `github_actions_incident_logs_reader_role_arn` — see [`infra/README.md`](infra/README.md).
 

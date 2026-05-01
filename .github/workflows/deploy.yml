@@ -1,4 +1,4 @@
-name: Deploy API to ECS
+name: Deploy API and Worker to ECS
 
 permissions:
   contents: read
@@ -6,7 +6,7 @@ permissions:
 
 on:
   workflow_run:
-    workflows: ["CI - Build & Push Docker Image"]
+    workflows: ["CI - Build & Push Docker Images"]
     types: [completed]
 
 concurrency:
@@ -22,6 +22,7 @@ jobs:
     env:
       TF_VAR_ami_id: ${{ vars.TF_AMI_ID }}
       TF_VAR_docker_image: "${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.event.workflow_run.head_sha }}"
+      TF_VAR_worker_image: "${{ secrets.DOCKERHUB_USERNAME }}/devops-worker:${{ github.event.workflow_run.head_sha }}"
       TF_VAR_ssh_allowed_cidrs: ${{ secrets.TF_SSH_ALLOWED_CIDRS }}
       TF_VAR_aws_region: ${{ vars.TF_AWS_REGION }}
       TF_VAR_enable_ecs: ${{ vars.TF_ENABLE_ECS }}
