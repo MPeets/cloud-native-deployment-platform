@@ -35,7 +35,7 @@ k8s/
 |------|--------|-----------|
 | **Replicas** | `2` in raw manifests; Helm defaults `replicaCount: 2` | Availability over a single pod. With **autoscaling on**, the Deployment uses **`autoscaling.minReplicas`** (2) as the replica count; HPA scales between min and max. |
 | **Image** | `mpeets/devops-api:latest` (defaults) | Aligns with CI image naming; `imagePullPolicy: Always` when using floating tags. |
-| **Probes** | Liveness + readiness both hit **`/health`** | Fast “process is up” checks without a database. After you add Postgres and `DATABASE_URL`, consider **`/ready`** for **readiness** so traffic waits until the DB is reachable (matches the API’s semantics). |
+| **Probes** | Liveness hits **`/health`**; readiness hits **`/ready`** | Liveness stays a fast process check, while readiness waits for the database before sending traffic to the pod. |
 | **Resources** | Requests + limits (`100m` / 128Mi → `250m` / 256Mi) | Realistic guardrails for a small Node service. |
 | **Rollout** | `maxUnavailable: 0`, `maxSurge: 1` | Zero-downtime rolling updates where the scheduler allows. |
 | **Service** | `ClusterIP`, port **80** → container **3000** | Internal cluster access; Ingress fronts port 80. |
