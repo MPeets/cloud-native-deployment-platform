@@ -180,5 +180,6 @@ After a successful apply (with ECS enabled), these are the outputs people and au
 
 - Run these commands from the `infra` directory.
 - Run bootstrap commands from `infra/bootstrap`.
+- `envs/<env>/terraform.tfvars` files in Git are **template defaults** only (VPC layout, booleans); keep **secrets and personal data** out of tracked files (`ssh_allowed_cidrs` examples use documentation TEST-NET where possible). Prefer GitHub **`TF_*` / `TF_VAR_*`** for anything sensitive so CI overrides values without committing them; only **`/terraform.tfvars`** (copied beside `backend.tf`) is gitignored locally.
 - If the bootstrap `state_bucket_name` changes, update the bucket name in `backend.tf` to match.
 - The managed RDS password and generated `DATABASE_URL` secret value are represented in Terraform state; keep the S3 backend private, encrypted, and access-controlled.
