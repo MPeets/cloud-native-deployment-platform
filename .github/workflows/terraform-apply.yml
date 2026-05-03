@@ -33,6 +33,7 @@ jobs:
 
     environment: production
     env:
+      TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT }}
       TF_VAR_ami_id: ${{ vars.TF_AMI_ID }}
       TF_VAR_docker_image: ${{ vars.TF_DOCKER_IMAGE }}
       TF_VAR_worker_image: ${{ vars.TF_WORKER_IMAGE }}
@@ -62,11 +63,18 @@ jobs:
         uses: hashicorp/setup-terraform@v4
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          terraform init -backend-config="envs/${ENV_NAME}/backend.hcl" -reconfigure
 
       - name: Terraform Plan
         if: github.event_name == 'workflow_dispatch'
-        run: terraform plan -lock-timeout=10m -out=tfplan
+        run: |
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          terraform plan \
+            -lock-timeout=10m \
+            -var-file="envs/${ENV_NAME}/terraform.tfvars" \
+            -out=tfplan
 
       - name: Download Terraform Plan Artifact
         if: github.event_name == 'workflow_run'

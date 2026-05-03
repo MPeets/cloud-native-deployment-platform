@@ -27,6 +27,7 @@ jobs:
 
     environment: production
     env:
+      TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT }}
       TF_VAR_ami_id: ${{ vars.TF_AMI_ID }}
       TF_VAR_docker_image: ${{ vars.TF_DOCKER_IMAGE }}
       TF_VAR_worker_image: ${{ vars.TF_WORKER_IMAGE }}
@@ -54,10 +55,17 @@ jobs:
         uses: hashicorp/setup-terraform@v4
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          terraform init -backend-config="envs/${ENV_NAME}/backend.hcl" -reconfigure
 
       - name: Terraform Destroy Plan
-        run: terraform plan -destroy -lock-timeout=10m -out=tfdestroy
+        run: |
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          terraform plan -destroy \
+            -lock-timeout=10m \
+            -var-file="envs/${ENV_NAME}/terraform.tfvars" \
+            -out=tfdestroy
 
       - name: Terraform Destroy
         run: terraform apply -lock-timeout=10m tfdestroy
