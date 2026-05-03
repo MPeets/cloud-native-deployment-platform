@@ -3,6 +3,12 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
+  name_prefix = "devops-api-${var.environment}"
+  common_tags = {
+    Environment = var.environment
+    Project     = "cloud-native-deployment-platform"
+  }
+
   subnet_azs = slice(
     data.aws_availability_zones.available.names,
     0,
@@ -31,17 +37,17 @@ resource "aws_vpc" "app" {
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  tags = {
-    Name = "devops-api-vpc"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc"
+  })
 }
 
 resource "aws_internet_gateway" "app" {
   vpc_id = aws_vpc.app.id
 
-  tags = {
-    Name = "devops-api-igw"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-igw"
+  })
 }
 
 resource "aws_subnet" "public" {
@@ -52,10 +58,10 @@ resource "aws_subnet" "public" {
   availability_zone       = each.value.availability_zone
   map_public_ip_on_launch = true
 
-  tags = {
-    Name = "devops-api-public-${each.key}"
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-${each.key}"
     Tier = "public"
-  }
+  })
 }
 
 resource "aws_subnet" "private" {
@@ -66,10 +72,10 @@ resource "aws_subnet" "private" {
   availability_zone       = each.value.availability_zone
   map_public_ip_on_launch = false
 
-  tags = {
-    Name = "devops-api-private-${each.key}"
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-${each.key}"
     Tier = "private"
-  }
+  })
 }
 
 resource "aws_route_table" "public" {
@@ -80,9 +86,9 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.app.id
   }
 
-  tags = {
-    Name = "devops-api-public-rt"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-rt"
+  })
 }
 
 resource "aws_route_table_association" "public" {
@@ -95,18 +101,18 @@ resource "aws_route_table_association" "public" {
 resource "aws_eip" "nat" {
   domain = "vpc"
 
-  tags = {
-    Name = "devops-api-nat-eip"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-eip"
+  })
 }
 
 resource "aws_nat_gateway" "app" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public[local.nat_public_subnet_key].id
 
-  tags = {
-    Name = "devops-api-nat"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat"
+  })
 
   depends_on = [aws_internet_gateway.app]
 }
@@ -119,9 +125,9 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.app.id
   }
 
-  tags = {
-    Name = "devops-api-private-rt"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-rt"
+  })
 }
 
 resource "aws_route_table_association" "private" {
