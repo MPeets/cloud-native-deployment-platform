@@ -16,7 +16,7 @@ resource "aws_security_group" "ecs_service" {
   count = var.enable_ecs ? 1 : 0
 
   name   = "${local.name_prefix}-ecs-service"
-  vpc_id = aws_vpc.app.id
+  vpc_id = module.network.vpc_id
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ecs-service"
@@ -41,7 +41,7 @@ resource "aws_security_group" "alb" {
   count = var.enable_ecs ? 1 : 0
 
   name   = "${local.name_prefix}-alb"
-  vpc_id = aws_vpc.app.id
+  vpc_id = module.network.vpc_id
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb-sg"
@@ -66,7 +66,7 @@ resource "aws_security_group" "vpc_endpoints" {
   count = var.enable_ecs ? 1 : 0
 
   name   = "${local.name_prefix}-vpc-endpoints"
-  vpc_id = aws_vpc.app.id
+  vpc_id = module.network.vpc_id
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-endpoints-sg"
@@ -90,10 +90,10 @@ resource "aws_security_group" "vpc_endpoints" {
 resource "aws_vpc_endpoint" "ecr_api" {
   count = var.enable_ecs ? 1 : 0
 
-  vpc_id              = aws_vpc.app.id
+  vpc_id              = module.network.vpc_id
   service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = values(aws_subnet.private)[*].id
+  subnet_ids          = module.network.private_subnet_ids
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 
@@ -105,10 +105,10 @@ resource "aws_vpc_endpoint" "ecr_api" {
 resource "aws_vpc_endpoint" "ecr_dkr" {
   count = var.enable_ecs ? 1 : 0
 
-  vpc_id              = aws_vpc.app.id
+  vpc_id              = module.network.vpc_id
   service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = values(aws_subnet.private)[*].id
+  subnet_ids          = module.network.private_subnet_ids
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 
@@ -120,10 +120,10 @@ resource "aws_vpc_endpoint" "ecr_dkr" {
 resource "aws_vpc_endpoint" "logs" {
   count = var.enable_ecs ? 1 : 0
 
-  vpc_id              = aws_vpc.app.id
+  vpc_id              = module.network.vpc_id
   service_name        = "com.amazonaws.${var.aws_region}.logs"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = values(aws_subnet.private)[*].id
+  subnet_ids          = module.network.private_subnet_ids
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 
@@ -135,10 +135,10 @@ resource "aws_vpc_endpoint" "logs" {
 resource "aws_vpc_endpoint" "s3" {
   count = var.enable_ecs ? 1 : 0
 
-  vpc_id            = aws_vpc.app.id
+  vpc_id            = module.network.vpc_id
   service_name      = "com.amazonaws.${var.aws_region}.s3"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = [aws_route_table.private.id]
+  route_table_ids   = [module.network.private_route_table_id]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-s3-endpoint"
@@ -152,7 +152,7 @@ resource "aws_lb" "app" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb[0].id]
-  subnets            = values(aws_subnet.public)[*].id
+  subnets            = module.network.public_subnet_ids
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"
@@ -165,7 +165,7 @@ resource "aws_lb_target_group" "app" {
   name        = "${local.name_prefix}-tg"
   port        = var.app_port
   protocol    = "HTTP"
-  vpc_id      = aws_vpc.app.id
+  vpc_id      = module.network.vpc_id
   target_type = "ip"
 
   tags = merge(local.common_tags, {
@@ -354,7 +354,7 @@ resource "aws_ecs_service" "app" {
   deployment_maximum_percent         = 200
 
   network_configuration {
-    subnets          = values(aws_subnet.private)[*].id
+    subnets          = module.network.private_subnet_ids
     security_groups  = [aws_security_group.ecs_service[0].id]
     assign_public_ip = var.ecs_assign_public_ip
   }
@@ -384,7 +384,7 @@ resource "aws_ecs_service" "worker" {
   deployment_maximum_percent         = 200
 
   network_configuration {
-    subnets          = values(aws_subnet.private)[*].id
+    subnets          = module.network.private_subnet_ids
     security_groups  = [aws_security_group.ecs_service[0].id]
     assign_public_ip = var.ecs_assign_public_ip
   }

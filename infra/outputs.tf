@@ -7,15 +7,15 @@ output "alb_dns_name" {
 }
 
 output "vpc_id" {
-  value = aws_vpc.app.id
+  value = module.network.vpc_id
 }
 
 output "public_subnet_ids" {
-  value = values(aws_subnet.public)[*].id
+  value = module.network.public_subnet_ids
 }
 
 output "private_subnet_ids" {
-  value = values(aws_subnet.private)[*].id
+  value = module.network.private_subnet_ids
 }
 
 output "rds_endpoint" {
@@ -28,7 +28,7 @@ output "database_url_secret_arn" {
 }
 
 output "nat_gateway_id" {
-  value = aws_nat_gateway.app.id
+  value = module.network.nat_gateway_id
 }
 
 output "vpc_endpoint_ids" {

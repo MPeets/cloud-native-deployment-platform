@@ -9,7 +9,7 @@ resource "aws_security_group" "rds" {
   count = var.enable_rds ? 1 : 0
 
   name   = "${local.name_prefix}-rds"
-  vpc_id = aws_vpc.app.id
+  vpc_id = module.network.vpc_id
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-sg"
@@ -38,7 +38,7 @@ resource "aws_db_subnet_group" "postgres" {
   count = var.enable_rds ? 1 : 0
 
   name       = "${local.name_prefix}-postgres"
-  subnet_ids = values(aws_subnet.private)[*].id
+  subnet_ids = module.network.private_subnet_ids
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-postgres-subnets"
