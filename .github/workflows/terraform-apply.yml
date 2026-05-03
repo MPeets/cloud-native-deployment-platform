@@ -106,6 +106,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         env:
           AWS_REGION: ${{ vars.TF_AWS_REGION }}
+          TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT }}
         run: |
           max_attempts=12
           sleep_seconds=30

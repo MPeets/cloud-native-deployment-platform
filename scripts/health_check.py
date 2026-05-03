@@ -358,7 +358,50 @@ def _env_truthy(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
 
 
-def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+def _effective_infra_environment() -> str:
+    """Match infra/envs naming: terraform `environment` and CI `${TF_INFRA_ENVIRONMENT:-prod}`."""
+    raw = (
+        os.environ.get("TF_INFRA_ENVIRONMENT")
+        or os.environ.get("TF_ENV")
+        or ""
+    ).strip().lower()
+    return raw if raw else "prod"
+
+
+def _default_name_prefix() -> str:
+    """
+    ECS cluster_name and log-group prefix mirror Terraform locals:
+    name_prefix = \"${base}-${var.environment}\" (default base devops-api).
+    """
+    base = (
+        os.environ.get("TF_STACK_PREFIX_BASE")
+        or os.environ.get("ECS_NAME_PREFIX")
+        or "devops-api"
+    ).strip()
+    if not base:
+        base = "devops-api"
+    return f"{base}-{_effective_infra_environment()}"
+
+
+def _default_ecs_cluster() -> str:
+    override = os.environ.get("ECS_CLUSTER", "").strip()
+    if override:
+        return override
+    return _default_name_prefix()
+
+
+def _default_ecs_service() -> str:
+    override = os.environ.get("ECS_SERVICE", "").strip()
+    if override:
+        return override
+    return f"{_default_name_prefix()}-api"
+
+
+def _default_log_group() -> str:
+    override = os.environ.get("LOG_GROUP", "").strip()
+    if override:
+        return override
+    return f"/ecs/{_default_name_prefix()}"
     defaults_region = (
         os.environ.get("AWS_REGION")
         or os.environ.get("AWS_DEFAULT_REGION")
@@ -379,18 +422,27 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--cluster",
-        default=os.environ.get("ECS_CLUSTER", "devops-api"),
-        help="ECS cluster name (default: env ECS_CLUSTER or devops-api)",
+        default=_default_ecs_cluster(),
+        help=(
+            "ECS cluster name (default: env ECS_CLUSTER else devops-api-<TF_INFRA_ENVIRONMENT>, "
+            "with TF_INFRA_ENVIRONMENT defaulting to prod when unset; matches Terraform name_prefix)"
+        ),
     )
     parser.add_argument(
         "--service",
-        default=os.environ.get("ECS_SERVICE", "devops-api"),
-        help="ECS service name (default: env ECS_SERVICE or devops-api)",
+        default=_default_ecs_service(),
+        help=(
+            "ECS service name (default: env ECS_SERVICE else <name_prefix>-api; "
+            "name_prefix from TF_INFRA_ENVIRONMENT as for --cluster)"
+        ),
     )
     parser.add_argument(
         "--log-group",
-        default=os.environ.get("LOG_GROUP", "/ecs/devops-api"),
-        help="CloudWatch log group (default: env LOG_GROUP or /ecs/devops-api)",
+        default=_default_log_group(),
+        help=(
+            "CloudWatch log group (default: env LOG_GROUP else /ecs/<name_prefix>; "
+            "name_prefix from TF_INFRA_ENVIRONMENT as for --cluster)"
+        ),
     )
     parser.add_argument(
         "--log-lookback",
@@ -512,16 +564,16 @@ def _demo_report() -> None:
     print_report(
         target_url="http://devops-api-alb-xxxx.eu-north-1.elb.amazonaws.com",
         region="eu-north-1",
-        cluster="devops-api",
-        service="devops-api",
+        cluster="devops-api-prod",
+        service="devops-api-prod-api",
         results=all_pass,
     )
     print()
     print_report(
         target_url="http://devops-api-alb-xxxx.eu-north-1.elb.amazonaws.com",
         region="eu-north-1",
-        cluster="devops-api",
-        service="devops-api",
+        cluster="devops-api-prod",
+        service="devops-api-prod-api",
         results=partial_fail,
     )
 

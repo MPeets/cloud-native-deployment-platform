@@ -39,7 +39,7 @@ The workflow [`.github/workflows/scripts-lint.yml`](../.github/workflows/scripts
 
 Prints a compact **pass/fail** report; exits **`0`** only if every enabled check passes. **`--demo`** prints sample output without calling AWS or HTTP.
 
-**Why it matters:** Post-deploy smoke tests reduce **“Terraform succeeded but users see 502”** incidents. [`.github/workflows/terraform-apply.yml`](../.github/workflows/terraform-apply.yml) uses it with **`ALB_DNS`** (and AWS credentials) after apply; [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs a **subset** (`--alb-dns localhost:3000 --skip-aws`) to validate the script path without needing ECS. Operators can run the same CLI locally with **`--alb-dns`**, **`--region`**, **`--cluster`**, **`--service`**, and **`--log-group`**.
+**Why it matters:** Post-deploy smoke tests reduce **“Terraform succeeded but users see 502”** incidents. [`.github/workflows/terraform-apply.yml`](../.github/workflows/terraform-apply.yml) sets **`ALB_DNS`**, passes **`TF_INFRA_ENVIRONMENT`**, AWS credentials after apply; ECS and logging defaults derive **`devops-api-<env>`** cluster, **`<prefix>-api`** service, and **`/ecs/<prefix>`** log group (**`prod`** when unset)—matching **`infra/envs/*/terraform.tfvars`**. Override **`ECS_CLUSTER`**, **`ECS_SERVICE`**, **`LOG_GROUP`**, or **`TF_STACK_PREFIX_BASE`** when needed. [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs a **subset** (`--alb-dns localhost:3000 --skip-aws`).
 
 ---
 
