@@ -402,6 +402,9 @@ def _default_log_group() -> str:
     if override:
         return override
     return f"/ecs/{_default_name_prefix()}"
+
+
+def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     defaults_region = (
         os.environ.get("AWS_REGION")
         or os.environ.get("AWS_DEFAULT_REGION")
@@ -424,24 +427,24 @@ def _default_log_group() -> str:
         "--cluster",
         default=_default_ecs_cluster(),
         help=(
-            "ECS cluster name (default: env ECS_CLUSTER else devops-api-<TF_INFRA_ENVIRONMENT>, "
-            "with TF_INFRA_ENVIRONMENT defaulting to prod when unset; matches Terraform name_prefix)"
+            "ECS cluster (default: ECS_CLUSTER or devops-api-<TF_INFRA_ENVIRONMENT>, "
+            "prod if unset; matches Terraform cluster name_prefix)"
         ),
     )
     parser.add_argument(
         "--service",
         default=_default_ecs_service(),
         help=(
-            "ECS service name (default: env ECS_SERVICE else <name_prefix>-api; "
-            "name_prefix from TF_INFRA_ENVIRONMENT as for --cluster)"
+            "ECS service (default: ECS_SERVICE else <prefix>-api; "
+            "prefix from TF_INFRA_ENVIRONMENT)"
         ),
     )
     parser.add_argument(
         "--log-group",
         default=_default_log_group(),
         help=(
-            "CloudWatch log group (default: env LOG_GROUP else /ecs/<name_prefix>; "
-            "name_prefix from TF_INFRA_ENVIRONMENT as for --cluster)"
+            "CloudWatch log group (default: LOG_GROUP else /ecs/<prefix>; "
+            "prefix from TF_INFRA_ENVIRONMENT)"
         ),
     )
     parser.add_argument(
