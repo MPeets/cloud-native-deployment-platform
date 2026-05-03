@@ -4,5 +4,6 @@
 *.tfplan
 crash.log
 
-# Local Terraform variable overrides (contains personal IPs, etc.)
-terraform.tfvars
+# Local overrides from template (often contains personal IPs). Only this path is ignored;
+# tracked files under envs/*/terraform.tfvars are shared template defaults for CI/portfolio.
+/terraform.tfvars
