@@ -54,26 +54,34 @@ terraform init
 terraform apply
 ```
 
-2. Return to the main infrastructure root:
+2. Go up to `infra/` and initialize **one** environment (`dev`, `prod`, …) using that env’s **backend partial config** plus **tfvars** under [`envs/`](./envs/).
 
 ```bash
 cd ..
-terraform init
+ENV_NAME=dev # or prod
+terraform init -backend-config=envs/${ENV_NAME}/backend.hcl -reconfigure
+terraform plan -var-file=envs/${ENV_NAME}/terraform.tfvars
+terraform apply -var-file=envs/${ENV_NAME}/terraform.tfvars
 ```
 
-For a brand-new environment, you can now continue with `terraform plan` and `terraform apply`.
-
-If you already have local state from before enabling the S3 backend, migrate it instead:
+If you previously used **local** state and are moving onto the remote backend, migrate **into that env key** explicitly:
 
 ```bash
-terraform init -migrate-state
+ENV_NAME=dev # env that should own your existing resources
+terraform init \
+  -backend-config=envs/${ENV_NAME}/backend.hcl \
+  -migrate-state
 ```
 
-3. Verify state now points to the remote backend:
+Then continue with normal `terraform plan -var-file=...` / `apply` runs for `ENV_NAME`.
+
+3. Sanity-check remote connectivity:
 
 ```bash
 terraform state list
 ```
+
+Isolation is primarily **distinct state keys** (see [`envs/`](./envs/)); workspaces are unchanged from Terraform’s defaults.
 
 ## Normal Workflow (After Backend Bootstrap)
 
@@ -89,9 +97,12 @@ Use the matching files under `envs/prod/` for production. Each environment keeps
 
 ## Drift Reporting
 
-The repository includes a small drift reporter that runs Terraform from the repo root, parses `terraform plan -detailed-exitcode -json`, and prints a human-readable summary of managed resources that differ from the desired state:
+The repository includes a small drift reporter that runs Terraform from the repo root, parses `terraform plan -detailed-exitcode -json`, and prints a human-readable summary of managed resources that differ from the desired state.
+
+Run `terraform init -backend-config=envs/<env>/backend.hcl -reconfigure` from `infra` first. To match CI, pass the same tfvars as extra plan arguments (from the **repo root** shell), for example:
 
 ```bash
+export TF_CLI_ARGS_plan=-var-file=envs/dev/terraform.tfvars # or envs/prod/terraform.tfvars
 python scripts/terraform_drift_report.py --terraform-dir infra
 ```
 
@@ -104,7 +115,9 @@ Exit codes are designed for CI:
 For deterministic local checks, you can also pipe Terraform JSON into the parser without running Terraform:
 
 ```bash
-terraform plan -detailed-exitcode -json | python ../scripts/terraform_drift_report.py --plan-json -
+cd infra
+terraform plan -detailed-exitcode -json -var-file=envs/dev/terraform.tfvars \
+  | python ../scripts/terraform_drift_report.py --plan-json -
 ```
 
 GitHub Actions also runs this on a weekday schedule in `.github/workflows/terraform-drift-report.yml`; the workflow writes the report to the job summary and uploads it as an artifact.
