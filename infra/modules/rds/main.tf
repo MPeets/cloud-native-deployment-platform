@@ -1,0 +1,84 @@
+resource "random_password" "rds_master" {
+  length  = 32
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "database_url" {
+  name                    = "${var.name_prefix}/database-url"
+  recovery_window_in_days = 0
+
+  tags = merge(var.common_tags, {
+    Name = "${var.name_prefix}/database-url"
+  })
+}
+
+resource "aws_security_group" "rds" {
+  name   = "${var.name_prefix}-rds"
+  vpc_id = var.vpc_id
+
+  tags = merge(var.common_tags, {
+    Name = "${var.name_prefix}-rds-sg"
+  })
+
+  dynamic "ingress" {
+    for_each = length(var.ecs_security_group_ids) > 0 ? [1] : []
+
+    content {
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = var.ecs_security_group_ids
+    }
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_db_subnet_group" "postgres" {
+  name       = "${var.name_prefix}-postgres"
+  subnet_ids = var.private_subnet_ids
+
+  tags = merge(var.common_tags, {
+    Name = "${var.name_prefix}-postgres-subnets"
+  })
+}
+
+resource "aws_db_instance" "postgres" {
+  identifier                 = "${var.name_prefix}-postgres"
+  engine                     = "postgres"
+  instance_class             = var.instance_class
+  allocated_storage          = var.allocated_storage
+  db_name                    = var.database_name
+  username                   = var.username
+  password                   = random_password.rds_master.result
+  db_subnet_group_name       = aws_db_subnet_group.postgres.name
+  vpc_security_group_ids     = [aws_security_group.rds.id]
+  publicly_accessible        = false
+  storage_encrypted          = true
+  backup_retention_period    = var.backup_retention_days
+  deletion_protection        = var.deletion_protection
+  skip_final_snapshot        = !var.deletion_protection
+  final_snapshot_identifier  = var.deletion_protection ? "${var.name_prefix}-postgres-final" : null
+  auto_minor_version_upgrade = true
+
+  tags = merge(var.common_tags, {
+    Name = "${var.name_prefix}-postgres"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "database_url" {
+  secret_id = aws_secretsmanager_secret.database_url.id
+  secret_string = format(
+    "postgres://%s:%s@%s:%s/%s",
+    var.username,
+    urlencode(random_password.rds_master.result),
+    aws_db_instance.postgres.address,
+    aws_db_instance.postgres.port,
+    var.database_name,
+  )
+}

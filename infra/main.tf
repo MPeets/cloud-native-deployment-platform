@@ -6,7 +6,7 @@ resource "aws_security_group" "allow_http" {
   count = var.enable_ec2 ? 1 : 0
 
   name   = "${local.name_prefix}-allow-http"
-  vpc_id = aws_vpc.app.id
+  vpc_id = module.network.vpc_id
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-allow-http-sg"
@@ -41,7 +41,7 @@ resource "aws_instance" "app" {
   instance_type = var.instance_type
   key_name      = var.key_name
 
-  subnet_id                   = aws_subnet.public[local.nat_public_subnet_key].id
+  subnet_id                   = module.network.nat_source_public_subnet_id
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.allow_http[0].id]
 

@@ -1,9 +1,17 @@
 # Terraform Infrastructure
 
-This folder contains two Terraform roots:
+This folder contains **two Terraform roots** plus shared **child modules**:
 
 - `bootstrap/`: creates the S3 bucket used by Terraform remote state. This root uses local state and is only needed when the backend bucket does not exist yet.
-- `./`: deploys the application infrastructure and configures Terraform to use the S3 backend in `backend.tf` (with S3-native state locking via `use_lockfile`). Environment-specific backend and variable inputs live under `envs/`.
+- `./`: main root configures the S3 backend in `backend.tf` (with S3-native state locking via `use_lockfile`). Environment-specific backend and variable inputs live under `envs/`.
+
+Child modules invoked from the main root ([`modules/`](./modules/)):
+
+- **`network`** — VPC, subnets, NAT, route tables  
+- **`alb`** — public ALB, HTTP listener `:80`, target group, ALB security group  
+- **`ecs_cluster`** — ECS tasks + VPC-endpoint security groups, interface VPC endpoints (`ecr.api` / `ecr.dkr` / `logs`), S3 gateway endpoint, ECS cluster, CloudWatch log group, and task execution role (managed `DATABASE_URL` read policy is attached in the root to avoid RDS/ECS ordering cycles)
+- **`rds`** — PostgreSQL RDS, secret `DATABASE_URL` when managed in-cluster  
+- **`ecs_service`** — Fargate task definition + ECS service (API uses `load_balancer`; worker skips it)
 
 Keeping backend bootstrap resources out of the main root avoids Terraform trying to manage the same bucket from the state stored in that bucket.
 
