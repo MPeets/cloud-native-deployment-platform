@@ -58,7 +58,7 @@ resource "aws_iam_role_policy" "github_incident_logs_reader" {
         Action = [
           "logs:FilterLogEvents",
         ]
-        Resource = "${aws_cloudwatch_log_group.ecs[0].arn}:*"
+        Resource = "${module.ecs_cluster[0].log_group_arn}:*"
       }
     ]
   })
