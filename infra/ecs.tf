@@ -1,6 +1,6 @@
 locals {
   external_database_url_secret_arn = var.database_url_secret_arn != null ? trimspace(var.database_url_secret_arn) : ""
-  managed_database_url_secret_arn  = var.enable_rds ? aws_secretsmanager_secret.database_url[0].arn : ""
+  managed_database_url_secret_arn  = length(module.rds) > 0 ? module.rds[0].database_url_secret_arn : ""
   use_database_url_secret          = local.external_database_url_secret_arn != "" || var.enable_rds
   database_url_secret_arn          = local.external_database_url_secret_arn != "" ? local.external_database_url_secret_arn : local.managed_database_url_secret_arn
   database_url_secrets = local.use_database_url_secret ? [
@@ -264,132 +264,71 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
   })
 }
 
-resource "aws_ecs_task_definition" "app" {
-  count = var.enable_ecs ? 1 : 0
-
-  family                   = "${local.name_prefix}-api"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = var.ecs_task_cpu
-  memory                   = var.ecs_task_memory
-  execution_role_arn       = aws_iam_role.ecs_task_execution[0].arn
-
-  container_definitions = jsonencode([
-    merge(
-      {
-        name      = "devops-api"
-        image     = var.docker_image
-        essential = true
-        portMappings = [
-          {
-            containerPort = var.app_port
-            hostPort      = var.app_port
-            protocol      = "tcp"
-          }
-        ]
-        logConfiguration = {
-          logDriver = "awslogs"
-          options = {
-            awslogs-group         = aws_cloudwatch_log_group.ecs[0].name
-            awslogs-region        = var.aws_region
-            awslogs-stream-prefix = "app"
-          }
-        }
-      },
-      length(local.database_url_secrets) > 0 ? { secrets = local.database_url_secrets } : {}
-    )
-  ])
-
-  depends_on = [
-    aws_iam_role_policy.ecs_task_execution_secrets,
-    aws_secretsmanager_secret_version.database_url,
-  ]
-}
-
-resource "aws_ecs_task_definition" "worker" {
-  count = var.enable_ecs ? 1 : 0
-
-  family                   = "${local.name_prefix}-worker"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = var.ecs_task_cpu
-  memory                   = var.ecs_task_memory
-  execution_role_arn       = aws_iam_role.ecs_task_execution[0].arn
-
-  container_definitions = jsonencode([
-    merge(
-      {
-        name      = "devops-worker"
-        image     = local.worker_image
-        essential = true
-        logConfiguration = {
-          logDriver = "awslogs"
-          options = {
-            awslogs-group         = aws_cloudwatch_log_group.ecs[0].name
-            awslogs-region        = var.aws_region
-            awslogs-stream-prefix = "worker"
-          }
-        }
-      },
-      length(local.database_url_secrets) > 0 ? { secrets = local.database_url_secrets } : {}
-    )
-  ])
-
-  depends_on = [
-    aws_iam_role_policy.ecs_task_execution_secrets,
-    aws_secretsmanager_secret_version.database_url,
-  ]
-}
-
-resource "aws_ecs_service" "app" {
-  count = var.enable_ecs ? 1 : 0
-
-  name                               = "${local.name_prefix}-api"
-  cluster                            = aws_ecs_cluster.app[0].id
-  task_definition                    = aws_ecs_task_definition.app[0].arn
-  desired_count                      = var.ecs_desired_count
-  launch_type                        = "FARGATE"
-  health_check_grace_period_seconds  = var.ecs_health_check_grace_period_seconds
-  deployment_minimum_healthy_percent = 100
-  deployment_maximum_percent         = 200
-
-  network_configuration {
-    subnets          = module.network.private_subnet_ids
-    security_groups  = [aws_security_group.ecs_service[0].id]
-    assign_public_ip = var.ecs_assign_public_ip
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.app[0].arn
-    container_name   = "devops-api"
-    container_port   = var.app_port
-  }
-
+module "ecs_service_api" {
+  count      = var.enable_ecs ? 1 : 0
+  source     = "./modules/ecs_service"
   depends_on = [aws_lb_listener.http[0]]
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-api-service"
-  })
+  common_tags = local.common_tags
+  aws_region  = var.aws_region
+
+  ecs_cluster_id       = aws_ecs_cluster.app[0].id
+  service_name         = "${local.name_prefix}-api"
+  task_family          = "${local.name_prefix}-api"
+  container_name       = "devops-api"
+  container_image      = var.docker_image
+  cpu                  = var.ecs_task_cpu
+  memory               = var.ecs_task_memory
+  execution_role_arn   = aws_iam_role.ecs_task_execution[0].arn
+  log_group_name       = aws_cloudwatch_log_group.ecs[0].name
+  log_stream_prefix    = "app"
+  subnet_ids           = module.network.private_subnet_ids
+  security_group_ids   = [aws_security_group.ecs_service[0].id]
+  assign_public_ip     = var.ecs_assign_public_ip
+  desired_count        = var.ecs_desired_count
+  database_url_secrets = local.database_url_secrets
+
+  port_mappings = [
+    {
+      containerPort = var.app_port
+      hostPort      = var.app_port
+      protocol      = "tcp"
+    },
+  ]
+
+  resource_name_tag = "${local.name_prefix}-api-service"
+
+  load_balancer = {
+    target_group_arn                  = aws_lb_target_group.app[0].arn
+    container_name                    = "devops-api"
+    container_port                    = var.app_port
+    health_check_grace_period_seconds = var.ecs_health_check_grace_period_seconds
+  }
 }
 
-resource "aws_ecs_service" "worker" {
-  count = var.enable_ecs ? 1 : 0
+module "ecs_service_worker" {
+  count  = var.enable_ecs ? 1 : 0
+  source = "./modules/ecs_service"
 
-  name                               = "${local.name_prefix}-worker"
-  cluster                            = aws_ecs_cluster.app[0].id
-  task_definition                    = aws_ecs_task_definition.worker[0].arn
-  desired_count                      = var.ecs_worker_desired_count
-  launch_type                        = "FARGATE"
-  deployment_minimum_healthy_percent = 100
-  deployment_maximum_percent         = 200
+  common_tags = local.common_tags
+  aws_region  = var.aws_region
 
-  network_configuration {
-    subnets          = module.network.private_subnet_ids
-    security_groups  = [aws_security_group.ecs_service[0].id]
-    assign_public_ip = var.ecs_assign_public_ip
-  }
+  ecs_cluster_id       = aws_ecs_cluster.app[0].id
+  service_name         = "${local.name_prefix}-worker"
+  task_family          = "${local.name_prefix}-worker"
+  container_name       = "devops-worker"
+  container_image      = local.worker_image
+  cpu                  = var.ecs_task_cpu
+  memory               = var.ecs_task_memory
+  execution_role_arn   = aws_iam_role.ecs_task_execution[0].arn
+  log_group_name       = aws_cloudwatch_log_group.ecs[0].name
+  log_stream_prefix    = "worker"
+  subnet_ids           = module.network.private_subnet_ids
+  security_group_ids   = [aws_security_group.ecs_service[0].id]
+  assign_public_ip     = var.ecs_assign_public_ip
+  desired_count        = var.ecs_worker_desired_count
+  database_url_secrets = local.database_url_secrets
+  port_mappings        = []
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-worker-service"
-  })
+  resource_name_tag = "${local.name_prefix}-worker-service"
 }
