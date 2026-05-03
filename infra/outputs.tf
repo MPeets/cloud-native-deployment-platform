@@ -19,7 +19,7 @@ output "private_subnet_ids" {
 }
 
 output "rds_endpoint" {
-  value = var.enable_rds ? aws_db_instance.postgres[0].address : null
+  value = var.enable_rds ? module.rds[0].db_address : null
 }
 
 output "database_url_secret_arn" {
