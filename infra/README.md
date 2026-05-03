@@ -3,7 +3,7 @@
 This folder contains two Terraform roots:
 
 - `bootstrap/`: creates the S3 bucket used by Terraform remote state. This root uses local state and is only needed when the backend bucket does not exist yet.
-- `./`: deploys the application infrastructure and configures Terraform to use the S3 backend in `backend.tf` (with S3-native state locking via `use_lockfile`).
+- `./`: deploys the application infrastructure and configures Terraform to use the S3 backend in `backend.tf` (with S3-native state locking via `use_lockfile`). Environment-specific backend and variable inputs live under `envs/`.
 
 Keeping backend bootstrap resources out of the main root avoids Terraform trying to manage the same bucket from the state stored in that bucket.
 
@@ -13,9 +13,9 @@ Keeping backend bootstrap resources out of the main root avoids Terraform trying
 - **Database:** **PostgreSQL RDS** is enabled by default (`enable_rds = true`) using the small `db.t4g.micro` instance class, private subnets, encrypted storage, and a generated `DATABASE_URL` secret for ECS.
 - **Legacy runtime:** **EC2 + Docker + systemd** is opt-in only (`enable_ec2 = false` by default) for debugging; it is not the main deployment path.
 - **Networking:** A dedicated **VPC** with two public and two **private** subnets (defaults in `variables.tf`), one **NAT gateway**, and **interface/gateway VPC endpoints** for ECR, CloudWatch Logs, and S3 when ECS is enabled.
-- **Remote state:** The main root uses the **S3 backend** defined in [`backend.tf`](./backend.tf) (bucket name, state key, region, encryption, and locking). If you fork the repo or use another AWS account, align `bootstrap/variables.tf` (or your bootstrap inputs), `backend.tf`, and any CI variables with **your** bucket and region.
-- **GitHub Actions + AWS:** Besides the usual deploy role (documented at the repo root), Terraform can create a **least-privilege OIDC IAM role** that only allows **CloudWatch Logs filter** calls against the **ECS service log group**. That supports the **Incident log report** workflow (`.github/workflows/incident-log-report.yml`). It is on by default (`enable_github_incident_logs_reader_role = true`) when ECS is enabled. After apply, set the repository variable **`AWS_INCIDENT_LOGS_READER_ROLE_ARN`** to the Terraform output **`github_actions_incident_logs_reader_role_arn`**. If you use a different GitHub repo, set **`github_actions_oidc_repository`** in `terraform.tfvars` (see below).
-- **Automation elsewhere in the repo:** **Terraform plan/apply/destroy** and **drift reporting** run from GitHub Actions; drift uses [`scripts/terraform_drift_report.py`](../scripts/terraform_drift_report.py) against this directory.
+- **Remote state:** The main root uses the **S3 backend** defined in [`backend.tf`](./backend.tf), with environment-specific backend keys in `envs/dev/backend.hcl` and `envs/prod/backend.hcl`. If you fork the repo or use another AWS account, align `bootstrap/variables.tf` (or your bootstrap inputs), `backend.tf`, the files under `envs/`, and any CI variables with **your** bucket and region.
+- **GitHub Actions + AWS:** Besides the usual deploy role (documented at the repo root), Terraform can create a **least-privilege OIDC IAM role** that only allows **CloudWatch Logs filter** calls against the **ECS service log group**. That supports the **Incident log report** workflow (`.github/workflows/incident-log-report.yml`). It is on by default (`enable_github_incident_logs_reader_role = true`) when ECS is enabled. The role name includes `environment`; each Terraform environment gets its own ARN, so **`AWS_INCIDENT_LOGS_READER_ROLE_ARN` should match whichever env runs the workflow** (or duplicate the workflow with distinct variables). After apply, set **`AWS_INCIDENT_LOGS_READER_ROLE_ARN`** to the Terraform output **`github_actions_incident_logs_reader_role_arn`**. If you use a different GitHub repo, set **`github_actions_oidc_repository`** in `terraform.tfvars` (see below).
+- **Automation elsewhere in the repo:** **Terraform plan/apply/destroy** and **drift reporting** run from GitHub Actions; drift uses [`scripts/terraform_drift_report.py`](../scripts/terraform_drift_report.py) against this directory. Set the repo variable **`TF_INFRA_ENVIRONMENT`** to **`dev`** or **`prod`** so workflows match `envs/<name>/`; when unset in CI scripts, **`prod`** is used (`${TF_INFRA_ENVIRONMENT:-prod}`).
 
 ## Local config (`terraform.tfvars`)
 
@@ -54,41 +54,55 @@ terraform init
 terraform apply
 ```
 
-2. Return to the main infrastructure root:
+2. Go up to `infra/` and initialize **one** environment (`dev`, `prod`, …) using that env’s **backend partial config** plus **tfvars** under [`envs/`](./envs/).
 
 ```bash
 cd ..
-terraform init
+ENV_NAME=dev # or prod
+terraform init -backend-config=envs/${ENV_NAME}/backend.hcl -reconfigure
+terraform plan -var-file=envs/${ENV_NAME}/terraform.tfvars
+terraform apply -var-file=envs/${ENV_NAME}/terraform.tfvars
 ```
 
-For a brand-new environment, you can now continue with `terraform plan` and `terraform apply`.
-
-If you already have local state from before enabling the S3 backend, migrate it instead:
+If you previously used **local** state and are moving onto the remote backend, migrate **into that env key** explicitly:
 
 ```bash
-terraform init -migrate-state
+ENV_NAME=dev # env that should own your existing resources
+terraform init \
+  -backend-config=envs/${ENV_NAME}/backend.hcl \
+  -migrate-state
 ```
 
-3. Verify state now points to the remote backend:
+Then continue with normal `terraform plan -var-file=...` / `apply` runs for `ENV_NAME`.
+
+3. Sanity-check remote connectivity:
 
 ```bash
 terraform state list
 ```
 
+Isolation is primarily **distinct state keys** (see [`envs/`](./envs/)); workspaces are unchanged from Terraform’s defaults.
+
 ## Normal Workflow (After Backend Bootstrap)
 
-Once the backend is bootstrapped, use normal Terraform commands:
+Once the backend is bootstrapped, initialize the environment you want to work on from the main `infra` root:
 
 ```bash
-terraform plan
-terraform apply
+terraform init -backend-config=envs/dev/backend.hcl -reconfigure
+terraform plan -var-file=envs/dev/terraform.tfvars
+terraform apply -var-file=envs/dev/terraform.tfvars
 ```
+
+Use the matching files under `envs/prod/` for production. Each environment keeps its own remote state key and variable values while reusing the same Terraform root.
 
 ## Drift Reporting
 
-The repository includes a small drift reporter that runs Terraform from the repo root, parses `terraform plan -detailed-exitcode -json`, and prints a human-readable summary of managed resources that differ from the desired state:
+The repository includes a small drift reporter that runs Terraform from the repo root, parses `terraform plan -detailed-exitcode -json`, and prints a human-readable summary of managed resources that differ from the desired state.
+
+Run `terraform init -backend-config=envs/<env>/backend.hcl -reconfigure` from `infra` first. To match CI, pass the same tfvars as extra plan arguments (from the **repo root** shell), for example:
 
 ```bash
+export TF_CLI_ARGS_plan=-var-file=envs/dev/terraform.tfvars # or envs/prod/terraform.tfvars
 python scripts/terraform_drift_report.py --terraform-dir infra
 ```
 
@@ -101,7 +115,9 @@ Exit codes are designed for CI:
 For deterministic local checks, you can also pipe Terraform JSON into the parser without running Terraform:
 
 ```bash
-terraform plan -detailed-exitcode -json | python ../scripts/terraform_drift_report.py --plan-json -
+cd infra
+terraform plan -detailed-exitcode -json -var-file=envs/dev/terraform.tfvars \
+  | python ../scripts/terraform_drift_report.py --plan-json -
 ```
 
 GitHub Actions also runs this on a weekday schedule in `.github/workflows/terraform-drift-report.yml`; the workflow writes the report to the job summary and uploads it as an artifact.
@@ -164,5 +180,6 @@ After a successful apply (with ECS enabled), these are the outputs people and au
 
 - Run these commands from the `infra` directory.
 - Run bootstrap commands from `infra/bootstrap`.
+- `envs/<env>/terraform.tfvars` files in Git are **template defaults** only (VPC layout, booleans); keep **secrets and personal data** out of tracked files (`ssh_allowed_cidrs` examples use documentation TEST-NET where possible). Prefer GitHub **`TF_*` / `TF_VAR_*`** for anything sensitive so CI overrides values without committing them; only **`/terraform.tfvars`** (copied beside `backend.tf`) is gitignored locally.
 - If the bootstrap `state_bucket_name` changes, update the bucket name in `backend.tf` to match.
 - The managed RDS password and generated `DATABASE_URL` secret value are represented in Terraform state; keep the S3 backend private, encrypted, and access-controlled.

@@ -3,6 +3,12 @@ variable "aws_region" {
   default = "eu-north-1"
 }
 
+variable "environment" {
+  type        = string
+  default     = "dev"
+  description = "Deployment environment name used for resource naming and tags."
+}
+
 variable "instance_type" {
   type    = string
   default = "t3.micro"

@@ -15,8 +15,12 @@ locals {
 resource "aws_security_group" "ecs_service" {
   count = var.enable_ecs ? 1 : 0
 
-  name   = "devops-api-ecs-service"
+  name   = "${local.name_prefix}-ecs-service"
   vpc_id = aws_vpc.app.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ecs-service"
+  })
 
   ingress {
     from_port       = var.app_port
@@ -36,8 +40,12 @@ resource "aws_security_group" "ecs_service" {
 resource "aws_security_group" "alb" {
   count = var.enable_ecs ? 1 : 0
 
-  name   = "devops-api-alb"
+  name   = "${local.name_prefix}-alb"
   vpc_id = aws_vpc.app.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-sg"
+  })
 
   ingress {
     from_port   = 80
@@ -57,8 +65,12 @@ resource "aws_security_group" "alb" {
 resource "aws_security_group" "vpc_endpoints" {
   count = var.enable_ecs ? 1 : 0
 
-  name   = "devops-api-vpc-endpoints"
+  name   = "${local.name_prefix}-vpc-endpoints"
   vpc_id = aws_vpc.app.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc-endpoints-sg"
+  })
 
   ingress {
     from_port       = 443
@@ -85,9 +97,9 @@ resource "aws_vpc_endpoint" "ecr_api" {
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 
-  tags = {
-    Name = "devops-api-ecr-api-endpoint"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ecr-api-endpoint"
+  })
 }
 
 resource "aws_vpc_endpoint" "ecr_dkr" {
@@ -100,9 +112,9 @@ resource "aws_vpc_endpoint" "ecr_dkr" {
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 
-  tags = {
-    Name = "devops-api-ecr-dkr-endpoint"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ecr-dkr-endpoint"
+  })
 }
 
 resource "aws_vpc_endpoint" "logs" {
@@ -115,9 +127,9 @@ resource "aws_vpc_endpoint" "logs" {
   security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
   private_dns_enabled = true
 
-  tags = {
-    Name = "devops-api-logs-endpoint"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-logs-endpoint"
+  })
 }
 
 resource "aws_vpc_endpoint" "s3" {
@@ -128,29 +140,37 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [aws_route_table.private.id]
 
-  tags = {
-    Name = "devops-api-s3-endpoint"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-s3-endpoint"
+  })
 }
 
 resource "aws_lb" "app" {
   count = var.enable_ecs ? 1 : 0
 
-  name               = "devops-api-alb"
+  name               = "${local.name_prefix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb[0].id]
   subnets            = values(aws_subnet.public)[*].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb"
+  })
 }
 
 resource "aws_lb_target_group" "app" {
   count = var.enable_ecs ? 1 : 0
 
-  name        = "devops-api-tg"
+  name        = "${local.name_prefix}-tg"
   port        = var.app_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.app.id
   target_type = "ip"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-tg"
+  })
 
   health_check {
     path                = var.alb_health_check_path
@@ -178,20 +198,28 @@ resource "aws_lb_listener" "http" {
 resource "aws_ecs_cluster" "app" {
   count = var.enable_ecs ? 1 : 0
 
-  name = "devops-api"
+  name = local.name_prefix
+
+  tags = merge(local.common_tags, {
+    Name = local.name_prefix
+  })
 }
 
 resource "aws_cloudwatch_log_group" "ecs" {
   count = var.enable_ecs ? 1 : 0
 
-  name              = "/ecs/devops-api"
+  name              = "/ecs/${local.name_prefix}"
   retention_in_days = var.ecs_log_retention_days
+
+  tags = merge(local.common_tags, {
+    Name = "/ecs/${local.name_prefix}"
+  })
 }
 
 resource "aws_iam_role" "ecs_task_execution" {
   count = var.enable_ecs ? 1 : 0
 
-  name = "devops-api-ecs-task-exec"
+  name = "${local.name_prefix}-ecs-task-exec"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -205,6 +233,10 @@ resource "aws_iam_role" "ecs_task_execution" {
       }
     ]
   })
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ecs-task-exec"
+  })
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
@@ -217,7 +249,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
 resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
   count = var.enable_ecs && local.use_database_url_secret ? 1 : 0
 
-  name = "read-database-url-secret"
+  name = "${local.name_prefix}-read-database-url-secret"
   role = aws_iam_role.ecs_task_execution[0].id
 
   policy = jsonencode({
@@ -235,7 +267,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
 resource "aws_ecs_task_definition" "app" {
   count = var.enable_ecs ? 1 : 0
 
-  family                   = "devops-api"
+  family                   = "${local.name_prefix}-api"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = var.ecs_task_cpu
@@ -277,7 +309,7 @@ resource "aws_ecs_task_definition" "app" {
 resource "aws_ecs_task_definition" "worker" {
   count = var.enable_ecs ? 1 : 0
 
-  family                   = "devops-worker"
+  family                   = "${local.name_prefix}-worker"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = var.ecs_task_cpu
@@ -312,7 +344,7 @@ resource "aws_ecs_task_definition" "worker" {
 resource "aws_ecs_service" "app" {
   count = var.enable_ecs ? 1 : 0
 
-  name                               = "devops-api"
+  name                               = "${local.name_prefix}-api"
   cluster                            = aws_ecs_cluster.app[0].id
   task_definition                    = aws_ecs_task_definition.app[0].arn
   desired_count                      = var.ecs_desired_count
@@ -334,12 +366,16 @@ resource "aws_ecs_service" "app" {
   }
 
   depends_on = [aws_lb_listener.http[0]]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-api-service"
+  })
 }
 
 resource "aws_ecs_service" "worker" {
   count = var.enable_ecs ? 1 : 0
 
-  name                               = "devops-worker"
+  name                               = "${local.name_prefix}-worker"
   cluster                            = aws_ecs_cluster.app[0].id
   task_definition                    = aws_ecs_task_definition.worker[0].arn
   desired_count                      = var.ecs_worker_desired_count
@@ -352,4 +388,8 @@ resource "aws_ecs_service" "worker" {
     security_groups  = [aws_security_group.ecs_service[0].id]
     assign_public_ip = var.ecs_assign_public_ip
   }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-worker-service"
+  })
 }

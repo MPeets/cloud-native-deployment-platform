@@ -5,8 +5,12 @@ provider "aws" {
 resource "aws_security_group" "allow_http" {
   count = var.enable_ec2 ? 1 : 0
 
-  name   = "allow_http"
+  name   = "${local.name_prefix}-allow-http"
   vpc_id = aws_vpc.app.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-allow-http-sg"
+  })
 
   ingress {
     from_port   = 3000
@@ -75,7 +79,7 @@ resource "aws_instance" "app" {
     systemctl start devops-api
   USERDATA
 
-  tags = {
-    Name = "devops-api-instance"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2"
+  })
 }

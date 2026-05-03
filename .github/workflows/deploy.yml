@@ -20,6 +20,7 @@ jobs:
 
     environment: production
     env:
+      TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT }}
       TF_VAR_ami_id: ${{ vars.TF_AMI_ID }}
       TF_VAR_docker_image: "${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.event.workflow_run.head_sha }}"
       TF_VAR_worker_image: "${{ secrets.DOCKERHUB_USERNAME }}/devops-worker:${{ github.event.workflow_run.head_sha }}"
@@ -49,7 +50,14 @@ jobs:
         uses: hashicorp/setup-terraform@v4
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          terraform init -backend-config="envs/${ENV_NAME}/backend.hcl" -reconfigure
 
       - name: Deploy image
-        run: terraform apply -auto-approve -lock-timeout=10m
+        run: |
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          terraform apply \
+            -auto-approve \
+            -lock-timeout=10m \
+            -var-file="envs/${ENV_NAME}/terraform.tfvars"

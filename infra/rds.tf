@@ -8,8 +8,12 @@ resource "random_password" "rds_master" {
 resource "aws_security_group" "rds" {
   count = var.enable_rds ? 1 : 0
 
-  name   = "devops-api-rds"
+  name   = "${local.name_prefix}-rds"
   vpc_id = aws_vpc.app.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rds-sg"
+  })
 
   dynamic "ingress" {
     for_each = var.enable_ecs ? [1] : []
@@ -33,14 +37,18 @@ resource "aws_security_group" "rds" {
 resource "aws_db_subnet_group" "postgres" {
   count = var.enable_rds ? 1 : 0
 
-  name       = "devops-api-postgres"
+  name       = "${local.name_prefix}-postgres"
   subnet_ids = values(aws_subnet.private)[*].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-postgres-subnets"
+  })
 }
 
 resource "aws_db_instance" "postgres" {
   count = var.enable_rds ? 1 : 0
 
-  identifier                 = "devops-api-postgres"
+  identifier                 = "${local.name_prefix}-postgres"
   engine                     = "postgres"
   instance_class             = var.rds_instance_class
   allocated_storage          = var.rds_allocated_storage
@@ -54,15 +62,23 @@ resource "aws_db_instance" "postgres" {
   backup_retention_period    = var.rds_backup_retention_days
   deletion_protection        = var.rds_deletion_protection
   skip_final_snapshot        = !var.rds_deletion_protection
-  final_snapshot_identifier  = var.rds_deletion_protection ? "devops-api-postgres-final" : null
+  final_snapshot_identifier  = var.rds_deletion_protection ? "${local.name_prefix}-postgres-final" : null
   auto_minor_version_upgrade = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-postgres"
+  })
 }
 
 resource "aws_secretsmanager_secret" "database_url" {
   count = var.enable_rds ? 1 : 0
 
-  name                    = "devops-api/database-url"
+  name                    = "${local.name_prefix}/database-url"
   recovery_window_in_days = 0
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}/database-url"
+  })
 }
 
 resource "aws_secretsmanager_secret_version" "database_url" {

@@ -15,7 +15,7 @@ data "aws_iam_openid_connect_provider" "github" {
 resource "aws_iam_role" "github_incident_logs_reader" {
   count = local.incident_logs_reader_count
 
-  name = "github-actions-incident-logs-reader"
+  name = "${local.name_prefix}-github-incident-logs-reader"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -38,15 +38,15 @@ resource "aws_iam_role" "github_incident_logs_reader" {
     ]
   })
 
-  tags = {
-    Name = "github-actions-incident-logs-reader"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-github-incident-logs-reader"
+  })
 }
 
 resource "aws_iam_role_policy" "github_incident_logs_reader" {
   count = local.incident_logs_reader_count
 
-  name = "cloudwatch-filter-ecs-devops-api-only"
+  name = "${local.name_prefix}-cloudwatch-filter-ecs-logs"
   role = aws_iam_role.github_incident_logs_reader[0].id
 
   policy = jsonencode({
