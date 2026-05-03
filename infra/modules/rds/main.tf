@@ -73,8 +73,10 @@ resource "aws_db_instance" "postgres" {
 
 resource "aws_secretsmanager_secret_version" "database_url" {
   secret_id = aws_secretsmanager_secret.database_url.id
+  # RDS PostgreSQL pg_hba expects TLS for in-VPC clients when force_ssl is on (or default rules
+  # only match hostssl). node-postgres reads sslmode from the connection string.
   secret_string = format(
-    "postgres://%s:%s@%s:%s/%s",
+    "postgres://%s:%s@%s:%s/%s?sslmode=require",
     var.username,
     urlencode(random_password.rds_master.result),
     aws_db_instance.postgres.address,
