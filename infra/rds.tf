@@ -1,96 +1,16 @@
-resource "random_password" "rds_master" {
-  count = var.enable_rds ? 1 : 0
+module "rds" {
+  count  = var.enable_rds ? 1 : 0
+  source = "./modules/rds"
 
-  length  = 32
-  special = false
-}
-
-resource "aws_security_group" "rds" {
-  count = var.enable_rds ? 1 : 0
-
-  name   = "${local.name_prefix}-rds"
-  vpc_id = module.network.vpc_id
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-rds-sg"
-  })
-
-  dynamic "ingress" {
-    for_each = var.enable_ecs ? [1] : []
-
-    content {
-      from_port       = 5432
-      to_port         = 5432
-      protocol        = "tcp"
-      security_groups = [aws_security_group.ecs_service[0].id]
-    }
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_db_subnet_group" "postgres" {
-  count = var.enable_rds ? 1 : 0
-
-  name       = "${local.name_prefix}-postgres"
-  subnet_ids = module.network.private_subnet_ids
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-postgres-subnets"
-  })
-}
-
-resource "aws_db_instance" "postgres" {
-  count = var.enable_rds ? 1 : 0
-
-  identifier                 = "${local.name_prefix}-postgres"
-  engine                     = "postgres"
-  instance_class             = var.rds_instance_class
-  allocated_storage          = var.rds_allocated_storage
-  db_name                    = var.rds_database_name
-  username                   = var.rds_username
-  password                   = random_password.rds_master[0].result
-  db_subnet_group_name       = aws_db_subnet_group.postgres[0].name
-  vpc_security_group_ids     = [aws_security_group.rds[0].id]
-  publicly_accessible        = false
-  storage_encrypted          = true
-  backup_retention_period    = var.rds_backup_retention_days
-  deletion_protection        = var.rds_deletion_protection
-  skip_final_snapshot        = !var.rds_deletion_protection
-  final_snapshot_identifier  = var.rds_deletion_protection ? "${local.name_prefix}-postgres-final" : null
-  auto_minor_version_upgrade = true
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-postgres"
-  })
-}
-
-resource "aws_secretsmanager_secret" "database_url" {
-  count = var.enable_rds ? 1 : 0
-
-  name                    = "${local.name_prefix}/database-url"
-  recovery_window_in_days = 0
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}/database-url"
-  })
-}
-
-resource "aws_secretsmanager_secret_version" "database_url" {
-  count = var.enable_rds ? 1 : 0
-
-  secret_id = aws_secretsmanager_secret.database_url[0].id
-  secret_string = format(
-    "postgres://%s:%s@%s:%s/%s",
-    var.rds_username,
-    urlencode(random_password.rds_master[0].result),
-    aws_db_instance.postgres[0].address,
-    aws_db_instance.postgres[0].port,
-    var.rds_database_name,
-  )
+  name_prefix            = local.name_prefix
+  common_tags            = local.common_tags
+  vpc_id                 = module.network.vpc_id
+  private_subnet_ids     = module.network.private_subnet_ids
+  ecs_security_group_ids = aws_security_group.ecs_service[*].id
+  instance_class         = var.rds_instance_class
+  allocated_storage      = var.rds_allocated_storage
+  database_name          = var.rds_database_name
+  username               = var.rds_username
+  backup_retention_days  = var.rds_backup_retention_days
+  deletion_protection    = var.rds_deletion_protection
 }
