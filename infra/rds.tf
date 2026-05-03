@@ -6,7 +6,7 @@ module "rds" {
   common_tags            = local.common_tags
   vpc_id                 = module.network.vpc_id
   private_subnet_ids     = module.network.private_subnet_ids
-  ecs_security_group_ids = aws_security_group.ecs_service[*].id
+  ecs_security_group_ids = flatten(module.ecs_cluster[*].ecs_tasks_security_group_id)
   instance_class         = var.rds_instance_class
   allocated_storage      = var.rds_allocated_storage
   database_name          = var.rds_database_name

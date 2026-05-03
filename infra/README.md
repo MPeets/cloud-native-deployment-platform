@@ -8,6 +8,8 @@ This folder contains **two Terraform roots** plus shared **child modules**:
 Child modules invoked from the main root ([`modules/`](./modules/)):
 
 - **`network`** — VPC, subnets, NAT, route tables  
+- **`alb`** — public ALB, HTTP listener `:80`, target group, ALB security group  
+- **`ecs_cluster`** — ECS tasks + VPC-endpoint security groups, interface VPC endpoints (`ecr.api` / `ecr.dkr` / `logs`), S3 gateway endpoint, ECS cluster, CloudWatch log group, and task execution role (managed `DATABASE_URL` read policy is attached in the root to avoid RDS/ECS ordering cycles)
 - **`rds`** — PostgreSQL RDS, secret `DATABASE_URL` when managed in-cluster  
 - **`ecs_service`** — Fargate task definition + ECS service (API uses `load_balancer`; worker skips it)
 

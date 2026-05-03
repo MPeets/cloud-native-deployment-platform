@@ -3,6 +3,15 @@ resource "random_password" "rds_master" {
   special = false
 }
 
+resource "aws_secretsmanager_secret" "database_url" {
+  name                    = "${var.name_prefix}/database-url"
+  recovery_window_in_days = 0
+
+  tags = merge(var.common_tags, {
+    Name = "${var.name_prefix}/database-url"
+  })
+}
+
 resource "aws_security_group" "rds" {
   name   = "${var.name_prefix}-rds"
   vpc_id = var.vpc_id
@@ -59,15 +68,6 @@ resource "aws_db_instance" "postgres" {
 
   tags = merge(var.common_tags, {
     Name = "${var.name_prefix}-postgres"
-  })
-}
-
-resource "aws_secretsmanager_secret" "database_url" {
-  name                    = "${var.name_prefix}/database-url"
-  recovery_window_in_days = 0
-
-  tags = merge(var.common_tags, {
-    Name = "${var.name_prefix}/database-url"
   })
 }
 

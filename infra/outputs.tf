@@ -3,7 +3,7 @@ output "public_ip" {
 }
 
 output "alb_dns_name" {
-  value = var.enable_ecs ? aws_lb.app[0].dns_name : null
+  value = var.enable_ecs ? module.alb[0].dns_name : null
 }
 
 output "vpc_id" {
@@ -32,12 +32,7 @@ output "nat_gateway_id" {
 }
 
 output "vpc_endpoint_ids" {
-  value = var.enable_ecs ? {
-    ecr_api = aws_vpc_endpoint.ecr_api[0].id
-    ecr_dkr = aws_vpc_endpoint.ecr_dkr[0].id
-    logs    = aws_vpc_endpoint.logs[0].id
-    s3      = aws_vpc_endpoint.s3[0].id
-  } : {}
+  value = var.enable_ecs ? module.ecs_cluster[0].vpc_endpoint_ids : {}
 }
 
 output "github_actions_incident_logs_reader_role_arn" {
