@@ -3,12 +3,6 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  name_prefix = "devops-api-${var.environment}"
-  common_tags = {
-    Environment = var.environment
-    Project     = "cloud-native-deployment-platform"
-  }
-
   subnet_azs = slice(
     data.aws_availability_zones.available.names,
     0,
