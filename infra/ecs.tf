@@ -41,11 +41,8 @@ module "ecs_cluster" {
 }
 
 resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
-  count = (
-    var.enable_ecs &&
-    local.use_database_url_secret &&
-    trimspace(local.database_url_secret_arn) != ""
-  ) ? 1 : 0
+  # Count must not depend on module.rds outputs: managed secret ARN is unknown until apply.
+  count = (var.enable_ecs && local.use_database_url_secret) ? 1 : 0
 
   name = "${local.name_prefix}-read-database-url-secret"
   role = module.ecs_cluster[0].ecs_task_execution_role_id
