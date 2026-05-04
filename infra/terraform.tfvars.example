@@ -16,3 +16,6 @@ ecs_assign_public_ip      = false
 vpc_cidr                  = "10.0.0.0/16"
 public_subnet_cidrs       = ["10.0.1.0/24", "10.0.2.0/24"]
 private_subnet_cidrs      = ["10.0.101.0/24", "10.0.102.0/24"]
+
+# Optional TLS: validated ACM cert ARN (same region as alb). Unset = HTTP-only demo (port 80).
+# alb_certificate_arn     = "arn:aws:acm:eu-north-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"

@@ -22,6 +22,7 @@ module "alb" {
   public_subnet_ids     = module.network.public_subnet_ids
   app_port              = var.app_port
   alb_health_check_path = var.alb_health_check_path
+  certificate_arn       = var.alb_certificate_arn
 }
 
 module "ecs_cluster" {

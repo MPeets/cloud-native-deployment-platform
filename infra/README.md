@@ -8,7 +8,7 @@ This folder contains **two Terraform roots** plus shared **child modules**:
 Child modules invoked from the main root ([`modules/`](./modules/)):
 
 - **`network`** — VPC, subnets, NAT, route tables  
-- **`alb`** — public ALB, HTTP listener `:80`, target group, ALB security group  
+- **`alb`** — public ALB, target group, ALB security group; **HTTP `:80`** only when `alb_certificate_arn` is unset (demo default). When `alb_certificate_arn` is set: **HTTPS `:443`**, **`HTTP→HTTPS` redirect** on 80.  
 - **`ecs_cluster`** — ECS tasks + VPC-endpoint security groups, interface VPC endpoints (`ecr.api` / `ecr.dkr` / `logs`), S3 gateway endpoint, ECS cluster, CloudWatch log group, and task execution role (managed `DATABASE_URL` read policy is attached in the root to avoid RDS/ECS ordering cycles)
 - **`rds`** — PostgreSQL RDS, secret `DATABASE_URL` when managed in-cluster  
 - **`ecs_service`** — Fargate task definition + ECS service (API uses `load_balancer`; worker skips it)
@@ -17,7 +17,7 @@ Keeping backend bootstrap resources out of the main root avoids Terraform trying
 
 ## Current status (what this stack does today)
 
-- **Primary runtime:** **ECS on Fargate** is the default (`enable_ecs = true`). API and worker tasks run in **private subnets** without public IPs by default (`ecs_assign_public_ip = false`). Traffic enters through an **Application Load Balancer** in public subnets (HTTP port 80) and only targets the API service.
+- **Primary runtime:** **ECS on Fargate** is the default (`enable_ecs = true`). API and worker tasks run in **private subnets** without public IPs by default (`ecs_assign_public_ip = false`). Traffic enters through an **Application Load Balancer** in public subnets (**HTTP port 80** unless you set **`alb_certificate_arn`** for HTTPS + redirect) and only targets the API service.
 - **Database:** **PostgreSQL RDS** is enabled by default (`enable_rds = true`) using the small `db.t4g.micro` instance class, private subnets, encrypted storage, and a generated `DATABASE_URL` secret for ECS.
 - **Legacy runtime:** **EC2 + Docker + systemd** is opt-in only (`enable_ec2 = false` by default) for debugging; it is not the main deployment path.
 - **Networking:** A dedicated **VPC** with two public and two **private** subnets (defaults in `variables.tf`), one **NAT gateway**, and **interface/gateway VPC endpoints** for ECR, CloudWatch Logs, and S3 when ECS is enabled.
@@ -46,6 +46,7 @@ Then edit `terraform.tfvars` and set:
 - `vpc_cidr`, `public_subnet_cidrs`, and `private_subnet_cidrs` if the default network ranges overlap with an existing environment
 - `enable_github_incident_logs_reader_role` — leave `true` to create the read-only CloudWatch role for incident reports; set `false` if you do not want that role
 - `github_actions_oidc_repository` — defaults to this template’s repo slug; **change it when you fork** so OIDC `sub` claims match your `owner/name` on GitHub
+- **`alb_certificate_arn`** — optional; when set, the ALB adds **TLS on 443** and redirects **HTTP to HTTPS**. The ARN must be a **validated ACM certificate in the ALB’s AWS region**. Issuing one is typically **`aws_acm_certificate`** plus DNS validation (often Route 53); leave unset for **HTTP-only**.
 
 Required values without usable defaults (see [`terraform.tfvars.example`](./terraform.tfvars.example)):
 
@@ -140,7 +141,7 @@ The legacy EC2 Docker/systemd runtime is disabled by default. To enable it for d
 
 This stage fronts ECS tasks with an Application Load Balancer:
 
-- Public traffic enters via ALB (HTTP port 80) and routes only to the API service.
+- Public traffic enters via ALB (**HTTP port 80**, or **HTTPS 443** plus **80→HTTPS redirect** when `alb_certificate_arn` is set) and routes only to the API service.
 - The ALB runs in the custom public subnets.
 - API and worker ECS tasks run in the custom private subnets without public IPs.
 - API and worker tasks receive `DATABASE_URL` from Secrets Manager. By default Terraform creates this secret from the managed RDS endpoint; `database_url_secret_arn` overrides it for external databases.
@@ -193,7 +194,7 @@ After a successful apply (with ECS enabled), these are the outputs people and au
 
 | Output | Meaning |
 |--------|---------|
-| `alb_dns_name` | Public DNS name of the load balancer (main HTTP entry point for the API). |
+| `alb_dns_name` | Public DNS name of the load balancer (HTTP **:80** entry point; **HTTPS :443** when `alb_certificate_arn` is set). |
 | `rds_endpoint`, `database_url_secret_arn` | Managed PostgreSQL endpoint and the Secrets Manager ARN injected into ECS tasks. |
 | `github_actions_incident_logs_reader_role_arn` | ARN to paste into GitHub as `AWS_INCIDENT_LOGS_READER_ROLE_ARN` when the incident-logs role is created. |
 | `ops_alerts_sns_topic_arn` | SNS topic for operational alarms (subscribe for email/chat/PagerDuty); null when both ECS and RDS are disabled. |
