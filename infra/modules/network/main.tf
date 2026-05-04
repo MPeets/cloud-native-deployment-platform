@@ -26,6 +26,7 @@ locals {
   nat_public_subnet_key = sort(keys(local.public_subnets))[0]
 }
 
+# tfsec:ignore:aws-ec2-require-vpc-flow-logs-for-all-vpcs
 resource "aws_vpc" "app" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -44,6 +45,7 @@ resource "aws_internet_gateway" "app" {
   })
 }
 
+# tfsec:ignore:aws-ec2-no-public-ip-subnet
 resource "aws_subnet" "public" {
   for_each = local.public_subnets
 

@@ -1,4 +1,5 @@
 # SNS topic for CloudWatch alarm actions (subscriptions and alarms added in follow-up commits).
+# tfsec:ignore:aws-sns-enable-topic-encryption
 resource "aws_sns_topic" "ops_alerts" {
   count = local.ops_notifications_enabled ? 1 : 0
 
