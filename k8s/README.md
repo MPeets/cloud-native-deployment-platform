@@ -1,32 +1,41 @@
 # Kubernetes packaging
 
-This directory ships a **Helm chart** for installable, configurable deployments of the API (including HPA and optional ServiceAccount).
+This directory ships **Helm charts** for the **API** ([`helm/devops-api/`](helm/devops-api/)) and **background worker** ([`helm/devops-worker/`](helm/devops-worker/))—installable, configurable workloads for Kubernetes.
 
 ## How this relates to the rest of the repo
 
 The **primary cloud path** in this repository is **ECS Fargate + ALB**, provisioned by Terraform ([`infra/`](../infra/README.md)). Nothing here replaces that automation. These assets are **portable packaging**: useful on local clusters (kind, minikube, Docker Desktop Kubernetes), teaching, or a later move to managed Kubernetes **without** folding Helm into Terraform today.
 
-For a **full stack with PostgreSQL** on one machine, see [`docker/`](../docker/README.md). The chart deploys the **API container**; supply Postgres separately, then set **`databaseUrl`** in `values.yaml` (chart-managed Secret) or **`databaseUrl.existingSecret`** (reuse your Secret). **`DATABASE_URL`** is injected via **`envFrom`** so **`/ready`** and DB-backed routes work once the URL points at a reachable database.
+For a **full stack with PostgreSQL** on one machine, see [`docker/`](../docker/README.md). Both charts expect **Postgres** reachable from the cluster. Set **`databaseUrl`** (chart-managed **`DATABASE_URL`** Secret + **`envFrom`**) or **`databaseUrl.existingSecret`** on each release—the API needs it for **`/ready`** and CRUD; the worker needs it to poll **`deployments`**. You can point both charts at the **same** Secret name if you create it once (for example **`kubectl create secret generic …`** then **`--set databaseUrl.existingSecret=…`** on each install).
 
 ## Layout
 
 ```
 k8s/
 ├── README.md
-└── helm/devops-api/
-    ├── Chart.yaml                 # chart v0.2.0, appVersion 1.0.0
-    ├── values.yaml
-    └── templates/
-        ├── _helpers.tpl
-        ├── database-secret.yaml   # emitted when databaseUrl.url set (no existingSecret)
-        ├── deployment.yaml
-        ├── hpa.yaml              # emitted when autoscaling.enabled is true
-        ├── ingress.yaml
-        ├── service.yaml
-        └── serviceaccount.yaml   # emitted when serviceAccount.create is true
+└── helm/
+    ├── devops-api/
+    │   ├── Chart.yaml                 # chart v0.2.0, appVersion 1.0.0
+    │   ├── values.yaml
+    │   └── templates/
+    │       ├── _helpers.tpl
+    │       ├── database-secret.yaml   # emitted when databaseUrl.url set (no existingSecret)
+    │       ├── deployment.yaml
+    │       ├── hpa.yaml               # emitted when autoscaling.enabled is true
+    │       ├── ingress.yaml
+    │       ├── service.yaml
+    │       └── serviceaccount.yaml    # emitted when serviceAccount.create is true
+    └── devops-worker/
+        ├── Chart.yaml                 # chart v0.1.0, appVersion 1.0.0
+        ├── values.yaml
+        └── templates/
+            ├── _helpers.tpl
+            ├── database-secret.yaml
+            ├── deployment.yaml
+            └── serviceaccount.yaml
 ```
 
-## Design choices (brief)
+## `devops-api` chart — design choices (brief)
 
 | Area | Choice | Rationale |
 |------|--------|-----------|
@@ -40,9 +49,18 @@ k8s/
 | **Database** | **`databaseUrl.url`** (chart Secret) or **`databaseUrl.existingSecret`** | Pods get **`DATABASE_URL`** via **`envFrom.secretRef`**; align with Compose-style URLs for local clusters. |
 | **Helm extras** | **HPA** (`autoscaling/v2`, CPU average **80%**, min **2** / max **5**), **ServiceAccount** | Autoscaling and pod identity. |
 
-## Helm chart
+## `devops-worker` chart — design choices (brief)
 
-Render manifests without installing:
+| Area | Choice | Rationale |
+|------|--------|-----------|
+| **Workload** | **Deployment**, default **`replicaCount: 1`** | Stateless poll loop; multiple replicas are safe (**`SKIP LOCKED`**) if you want throughput—raise **`replicaCount`**. |
+| **No Service/Ingress** | Worker does not expose HTTP | Only **`DATABASE_URL`** and **`WORKER_*`** env tuning matter. |
+| **Image** | `mpeets/devops-worker:latest` | Matches CI tags (`<registry>/devops-worker:<sha>`). |
+| **Rollout** | **`maxSurge: 0`**, **`maxUnavailable: 1`** | Single-replica-friendly replacement strategy. |
+| **Database** | Same **`databaseUrl`** pattern as API | Shared Postgres URL via **`databaseUrl.url`** / **`existingSecret`**. |
+| **Tuning** | **`worker.pollIntervalMs`**, **`processingMs`**, **`failureRate`** | Maps to **`WORKER_POLL_INTERVAL_MS`**, **`WORKER_PROCESSING_MS`**, **`WORKER_FAILURE_RATE`**. |
+
+## `devops-api` chart — commands
 
 ```bash
 helm template demo ./k8s/helm/devops-api
@@ -77,6 +95,27 @@ helm upgrade --install demo ./k8s/helm/devops-api -n devops --create-namespace \
   --set replicaCount=2
 ```
 
+## `devops-worker` chart — commands
+
+Render manifests:
+
+```bash
+helm template demo-worker ./k8s/helm/devops-worker
+```
+
+Lint:
+
+```bash
+helm lint ./k8s/helm/devops-worker
+```
+
+Install example (same namespace as API often makes sense; share DB URL):
+
+```bash
+helm upgrade --install demo-worker ./k8s/helm/devops-worker --namespace devops --create-namespace \
+  --set databaseUrl.url=postgres://USER:PASS@postgres.devops.svc.cluster.local:5432/DBNAME
+```
+
 ## CI validation (GitHub Actions)
 
 Workflow: [`.github/workflows/k8s-lint.yml`](../.github/workflows/k8s-lint.yml).
@@ -88,8 +127,8 @@ Workflow: [`.github/workflows/k8s-lint.yml`](../.github/workflows/k8s-lint.yml).
 
 Steps (current tooling as pinned in the workflow):
 
-1. **`helm lint`** on `k8s/helm/devops-api/`.
-2. **`helm template`** piped to **kubeconform** — validates rendered chart objects against a pinned Kubernetes OpenAPI schema (**1.30.0**), no cluster required.
+1. **`helm lint`** on **`k8s/helm/devops-api/`** and **`k8s/helm/devops-worker/`**.
+2. **`helm template`** for each chart piped to **kubeconform** — validates rendered objects against a pinned Kubernetes OpenAPI schema (**1.30.0**), no cluster required.
 
 Helm CLI in CI: **v3.14.4**. Kubeconform: **v0.6.7**.
 
@@ -102,6 +141,6 @@ Helm CLI in CI: **v3.14.4**. Kubeconform: **v0.6.7**.
 3. Install an **Ingress controller** that satisfies `ingressClassName: nginx` (for example the **ingress-nginx** Helm chart).
 4. Map the Ingress host to the loopback address your controller uses (often `127.0.0.1 devops-api.local` in the OS hosts file).
 5. Build and tag the app image if you are not pulling from a registry, then install with overrides as above.
-6. Run Postgres in or reachable from the cluster, then install with **`--set databaseUrl.url=postgres://...`** (chart creates a Secret and **`envFrom`**) or **`--set databaseUrl.existingSecret=...`** if you manage the Secret yourself.
+6. Run Postgres in or reachable from the cluster, then install **both** charts with **`--set databaseUrl.url=postgres://...`** (each chart can create its own Secret) or **`--set databaseUrl.existingSecret=...`** once you have a shared Secret. Run **schema migrations** against that database before expecting the API/worker to behave—see [`scripts/README.md`](../scripts/README.md) (Kubernetes does not run the Compose **migrate** job for you).
 
 Expect brief **503** responses from the ingress while pods are still `ContainerCreating` or failing readiness; confirm `kubectl get pods -n <ns>` shows **Running** and **READY** before calling the URL again.

@@ -1,0 +1,39 @@
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: mpeets/devops-worker
+  tag: latest
+  pullPolicy: Always
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Tune polling behavior (maps to WORKER_* env vars).
+worker:
+  pollIntervalMs: 5000
+  processingMs: 3000
+  failureRate: "0.1"
+
+# Prefer existingSecret in prod.
+databaseUrl:
+  existingSecret: ""
+  url: ""
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 192Mi
+  requests:
+    cpu: 50m
+    memory: 96Mi
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+    maxSurge: 0

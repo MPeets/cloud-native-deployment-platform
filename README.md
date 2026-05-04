@@ -1,12 +1,12 @@
 # cloud-native-deployment-platform
 
-An end-to-end **DevOps sample**: a small **HTTP API** and **background worker** backed by **PostgreSQL**, packaged in **Docker**, deployed to **AWS** (ECS Fargate + load balancer) with **Terraform**, and validated by **GitHub Actions**. The same API is also packaged as a **Helm chart** under [`k8s/`](k8s/) for local clusters or a future move to managed Kubernetes—without changing the primary ECS design.
+An end-to-end **DevOps sample**: a small **HTTP API** and **background worker** backed by **PostgreSQL**, packaged in **Docker**, deployed to **AWS** (ECS Fargate + load balancer) with **Terraform**, and validated by **GitHub Actions**. The API and worker are also packaged as **Helm charts** under [`k8s/helm/`](k8s/helm/) for local clusters or a future move to managed Kubernetes—without changing the primary ECS design.
 
 This file is the **map of the repo**. For depth, follow the links below.
 
 ## Architecture
 
-**Production (AWS):** Terraform-managed VPC, Internet-facing **ALB → ECS Fargate API** and a **private worker** service, **RDS PostgreSQL**, **VPC endpoints** (ECR, Logs, S3), **Secrets Manager** for `DATABASE_URL`, and **CloudWatch → SNS** for operational alarms. The ALB is **HTTP-only (port 80)** by default for a cheap demo; enable TLS by setting **`alb_certificate_arn`** (validated **ACM** certificate in the **same region** as the ALB—usually **`aws_acm_certificate`** with DNS validation, then a **listener on 443** and **HTTP→HTTPS redirect**, which this repo wires when that ARN is set). The **legacy EC2 + Docker** path (`enable_ec2`) is optional and off by default (dotted edge below). Portable **Kubernetes** packaging for the **API only** lives in [`k8s/`](k8s/) (**Helm**); supply Postgres separately and set **`databaseUrl`** (chart-managed **`DATABASE_URL`** Secret + **`envFrom`**) or **`databaseUrl.existingSecret`**—see [`k8s/README.md`](k8s/README.md). It is not part of this topology.
+**Production (AWS):** Terraform-managed VPC, Internet-facing **ALB → ECS Fargate API** and a **private worker** service, **RDS PostgreSQL**, **VPC endpoints** (ECR, Logs, S3), **Secrets Manager** for `DATABASE_URL`, and **CloudWatch → SNS** for operational alarms. The ALB is **HTTP-only (port 80)** by default for a cheap demo; enable TLS by setting **`alb_certificate_arn`** (validated **ACM** certificate in the **same region** as the ALB—usually **`aws_acm_certificate`** with DNS validation, then a **listener on 443** and **HTTP→HTTPS redirect**, which this repo wires when that ARN is set). The **legacy EC2 + Docker** path (`enable_ec2`) is optional and off by default (dotted edge below). Portable **Kubernetes** packaging (**Helm**: [`k8s/helm/devops-api`](k8s/helm/devops-api), [`k8s/helm/devops-worker`](k8s/helm/devops-worker)); supply Postgres separately and set **`databaseUrl`** per chart or share **`databaseUrl.existingSecret`**—see [`k8s/README.md`](k8s/README.md). It is not part of this topology.
 
 ```mermaid
 flowchart TB
@@ -102,7 +102,7 @@ flowchart TB
 | **[`migrations/`](migrations/)** | Numbered SQL migrations. | Applied via [`scripts/run_migrations.py`](scripts/run_migrations.py); see [`scripts/README.md`](scripts/README.md) and [`docker/README.md`](docker/README.md). |
 | **[`docker/`](docker/)** | Docker Compose: Postgres, migrations, API, worker. | [`docker/README.md`](docker/README.md) |
 | **[`infra/`](infra/)** | Terraform: VPC, ECS Fargate, ALB, optional EC2 legacy, OIDC-friendly IAM, **CloudWatch alarms + SNS** for ops. | [`infra/README.md`](infra/README.md) |
-| **[`k8s/`](k8s/)** | Helm chart for the API only (portable packaging; **`DATABASE_URL`** via values). | [`k8s/README.md`](k8s/README.md) |
+| **[`k8s/`](k8s/)** | Helm charts for **API** + **worker** (portable packaging; **`DATABASE_URL`** via **`databaseUrl`**). | [`k8s/README.md`](k8s/README.md) |
 | **[`scripts/`](scripts/)** | Python helpers: drift report, migrations runner, deploy health check, incident log pull. | [`scripts/README.md`](scripts/README.md) |
 | **[`.github/workflows/`](.github/workflows/)** | CI/CD: image build, Terraform plan/apply/destroy, drift report, K8s lint, script lint, incident reports, etc. | Open the YAML files for triggers and inputs. |
 
