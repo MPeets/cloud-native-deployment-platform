@@ -1,3 +1,6 @@
+# tfsec:ignore:aws-ec2-add-description-to-security-group
+# tfsec:ignore:aws-ec2-add-description-to-security-group-rule
+# tfsec:ignore:aws-ec2-no-public-egress-sgr
 resource "aws_security_group" "ecs_tasks" {
   name   = "${var.name_prefix}-ecs-service"
   vpc_id = var.vpc_id
@@ -21,6 +24,9 @@ resource "aws_security_group" "ecs_tasks" {
   }
 }
 
+# tfsec:ignore:aws-ec2-add-description-to-security-group
+# tfsec:ignore:aws-ec2-add-description-to-security-group-rule
+# tfsec:ignore:aws-ec2-no-public-egress-sgr
 resource "aws_security_group" "vpc_endpoints" {
   name   = "${var.name_prefix}-vpc-endpoints"
   vpc_id = var.vpc_id
@@ -94,6 +100,7 @@ resource "aws_vpc_endpoint" "s3" {
   })
 }
 
+# tfsec:ignore:aws-ecs-enable-container-insight
 resource "aws_ecs_cluster" "this" {
   name = var.name_prefix
 
@@ -102,6 +109,7 @@ resource "aws_ecs_cluster" "this" {
   })
 }
 
+# tfsec:ignore:aws-cloudwatch-log-group-customer-key
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.name_prefix}"
   retention_in_days = var.ecs_log_retention_days

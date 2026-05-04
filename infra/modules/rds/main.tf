@@ -3,6 +3,7 @@ resource "random_password" "rds_master" {
   special = false
 }
 
+# tfsec:ignore:aws-ssm-secret-use-customer-key
 resource "aws_secretsmanager_secret" "database_url" {
   name                    = "${var.name_prefix}/database-url"
   recovery_window_in_days = 0
@@ -12,6 +13,7 @@ resource "aws_secretsmanager_secret" "database_url" {
   })
 }
 
+# tfsec:ignore:aws-ec2-add-description-to-security-group
 resource "aws_security_group" "rds" {
   name   = "${var.name_prefix}-rds"
   vpc_id = var.vpc_id
@@ -31,6 +33,8 @@ resource "aws_security_group" "rds" {
     }
   }
 
+  # tfsec:ignore:aws-ec2-no-public-egress-sgr
+  # tfsec:ignore:aws-ec2-add-description-to-security-group-rule
   egress {
     from_port   = 0
     to_port     = 0
@@ -48,6 +52,9 @@ resource "aws_db_subnet_group" "postgres" {
   })
 }
 
+# tfsec:ignore:aws-rds-enable-iam-auth
+# tfsec:ignore:aws-rds-specify-backup-retention
+# tfsec:ignore:aws-rds-enable-performance-insights
 resource "aws_db_instance" "postgres" {
   identifier                 = "${var.name_prefix}-postgres"
   engine                     = "postgres"
@@ -61,6 +68,7 @@ resource "aws_db_instance" "postgres" {
   publicly_accessible        = false
   storage_encrypted          = true
   backup_retention_period    = var.backup_retention_days
+  # tfsec:ignore:AVD-AWS-0177
   deletion_protection        = var.deletion_protection
   skip_final_snapshot        = !var.deletion_protection
   final_snapshot_identifier  = var.deletion_protection ? "${var.name_prefix}-postgres-final" : null

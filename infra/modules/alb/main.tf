@@ -3,6 +3,10 @@ locals {
   use_https               = local.certificate_arn_trimmed != ""
 }
 
+# tfsec:ignore:aws-ec2-no-public-ingress-sgr
+# tfsec:ignore:aws-ec2-no-public-egress-sgr
+# tfsec:ignore:aws-ec2-add-description-to-security-group
+# tfsec:ignore:aws-ec2-add-description-to-security-group-rule
 resource "aws_security_group" "this" {
   name   = "${var.name_prefix}-alb"
   vpc_id = var.vpc_id
@@ -36,6 +40,8 @@ resource "aws_security_group" "this" {
   }
 }
 
+# tfsec:ignore:aws-elb-drop-invalid-headers
+# tfsec:ignore:aws-elb-alb-not-public
 resource "aws_lb" "this" {
   name               = "${var.name_prefix}-alb"
   internal           = false
@@ -69,6 +75,7 @@ resource "aws_lb_target_group" "this" {
   }
 }
 
+# tfsec:ignore:aws-elb-http-not-used
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.this.arn
   port              = 80

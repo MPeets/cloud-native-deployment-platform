@@ -75,7 +75,7 @@ jobs:
 
       - name: tfsec
         working-directory: infra
-        run: tfsec . --no-module-downloads --soft-fail
+        run: tfsec . --no-module-downloads
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v6
