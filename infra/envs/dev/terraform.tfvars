@@ -1,5 +1,5 @@
-aws_region               = "eu-north-1"
-environment              = "dev"
+aws_region  = "eu-north-1"
+environment = "dev"
 # In GitHub Actions, TF_VAR_* images resolve from the latest green Docker CI on main. Do not use :latest.
 docker_image             = "mpeets/devops-api:tfvars-placeholder-use-tf-var"
 worker_image             = "mpeets/devops-worker:tfvars-placeholder-use-tf-var"
