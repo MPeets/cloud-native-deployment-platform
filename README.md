@@ -12,7 +12,7 @@ This file is the **map of the repo**. For depth, follow the links below.
 | **[`worker/`](worker/)** | Polls DB; moves deployments from pending through running to succeeded/failed (demo lifecycle). | [`worker/README.md`](worker/README.md) |
 | **[`migrations/`](migrations/)** | Numbered SQL migrations. | Applied via [`scripts/run_migrations.py`](scripts/run_migrations.py); see [`scripts/README.md`](scripts/README.md) and [`docker/README.md`](docker/README.md). |
 | **[`docker/`](docker/)** | Docker Compose: Postgres, migrations, API, worker. | [`docker/README.md`](docker/README.md) |
-| **[`infra/`](infra/)** | Terraform: VPC, ECS Fargate, ALB, optional EC2 legacy, OIDC-friendly IAM (including incident log reader). | [`infra/README.md`](infra/README.md) |
+| **[`infra/`](infra/)** | Terraform: VPC, ECS Fargate, ALB, optional EC2 legacy, OIDC-friendly IAM, **CloudWatch alarms + SNS** for ops. | [`infra/README.md`](infra/README.md) |
 | **[`k8s/`](k8s/)** | Kubernetes YAML + Helm chart for the API (portable packaging). | [`k8s/README.md`](k8s/README.md) |
 | **[`scripts/`](scripts/)** | Python helpers: drift report, migrations runner, deploy health check, incident log pull. | [`scripts/README.md`](scripts/README.md) |
 | **[`.github/workflows/`](.github/workflows/)** | CI/CD: image build, Terraform plan/apply/destroy, drift report, K8s lint, script lint, incident reports, etc. | Open the YAML files for triggers and inputs. |
@@ -21,7 +21,7 @@ This file is the **map of the repo**. For depth, follow the links below.
 
 1. **Develop** the API and worker; **tests** run in CI.
 2. **CI** builds and pushes API and worker container images; **Terraform** (manually or via workflows) rolls the API behind an **ALB** and runs the worker as a private ECS service.
-3. **CloudWatch** collects logs; **scripts** can smoke-test the ALB, check ECS, scan recent logs, or summarize Terraform drift.
+3. **CloudWatch** collects logs and can raise **alarms** (ALB 5xx, ECS capacity, RDS storage/CPU) on an **SNS topic** for notifications; **scripts** can smoke-test the ALB, check ECS, scan recent logs, or summarize Terraform drift.
 4. **Locally**, **Compose** brings up DB + migrate + API + worker so you can work without AWS.
 
 **Production path:** ECS Fargate + ALB (Terraform). **Legacy path:** single EC2 + Docker (optional, off by default).
