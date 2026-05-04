@@ -40,6 +40,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.62.0
+
+      - name: TFLint init
+        working-directory: infra
+        run: tflint --init
+
+      - name: TFLint
+        working-directory: infra
+        run: tflint --recursive --minimum-failure-severity error
+
+      - name: Install tfsec
+        env:
+          TFSEC_VERSION: v1.28.14
+        run: |
+          set -euo pipefail
+          curl -sSL "https://github.com/aquasecurity/tfsec/releases/download/${TFSEC_VERSION}/tfsec-linux-amd64" -o tfsec
+          chmod +x tfsec
+          sudo mv tfsec /usr/local/bin/tfsec
+          tfsec --version
+
+      - name: tfsec
+        working-directory: infra
+        run: tfsec . --no-module-downloads --soft-fail
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v6
         with:
