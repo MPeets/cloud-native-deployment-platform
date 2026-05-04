@@ -40,6 +40,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.62.0
+
+      - name: TFLint init
+        working-directory: infra
+        run: tflint --init
+
+      - name: TFLint
+        working-directory: infra
+        run: tflint --recursive --minimum-failure-severity error
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v6
         with:
