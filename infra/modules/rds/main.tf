@@ -56,18 +56,18 @@ resource "aws_db_subnet_group" "postgres" {
 # tfsec:ignore:aws-rds-specify-backup-retention
 # tfsec:ignore:aws-rds-enable-performance-insights
 resource "aws_db_instance" "postgres" {
-  identifier                 = "${var.name_prefix}-postgres"
-  engine                     = "postgres"
-  instance_class             = var.instance_class
-  allocated_storage          = var.allocated_storage
-  db_name                    = var.database_name
-  username                   = var.username
-  password                   = random_password.rds_master.result
-  db_subnet_group_name       = aws_db_subnet_group.postgres.name
-  vpc_security_group_ids     = [aws_security_group.rds.id]
-  publicly_accessible        = false
-  storage_encrypted          = true
-  backup_retention_period    = var.backup_retention_days
+  identifier              = "${var.name_prefix}-postgres"
+  engine                  = "postgres"
+  instance_class          = var.instance_class
+  allocated_storage       = var.allocated_storage
+  db_name                 = var.database_name
+  username                = var.username
+  password                = random_password.rds_master.result
+  db_subnet_group_name    = aws_db_subnet_group.postgres.name
+  vpc_security_group_ids  = [aws_security_group.rds.id]
+  publicly_accessible     = false
+  storage_encrypted       = true
+  backup_retention_period = var.backup_retention_days
   # tfsec:ignore:AVD-AWS-0177
   deletion_protection        = var.deletion_protection
   skip_final_snapshot        = !var.deletion_protection
