@@ -21,7 +21,7 @@ This document covers **how to verify the stack**, **what alerts mean**, **where 
 | **SNS** | Alarm destination (`ops_alerts_sns_topic_arn` from Terraform) |
 | **Terraform** | `infra/` with per-env state under `infra/envs/<env>/` |
 
-Optional: **EC2 + Docker** (`enable_ec2`) and **Kubernetes** packaging (`k8s/helm/devops-api`, API only—Postgres and **`DATABASE_URL`** via chart **`databaseUrl`** or your own Secret; see [`k8s/README.md`](../k8s/README.md)) are not part of the default AWS topology.
+Optional: **EC2 + Docker** (`enable_ec2`) and **Kubernetes** packaging (**`k8s/helm/devops-api`**, **`k8s/helm/devops-worker`**—Postgres plus **`databaseUrl`** / shared Secret; run migrations yourself; see [`k8s/README.md`](../k8s/README.md)) are not part of the default AWS topology.
 
 ---
 
@@ -101,7 +101,7 @@ For AWS, decide explicitly how you run migrations in your own process (e.g. one-
 
 **Docker Compose** under **`docker/`** runs Postgres, migrate, API (**`:3000`**), and worker on one network—useful to validate behavior without AWS. See [`docker/README.md`](../docker/README.md).
 
-**Kubernetes (optional):** The Helm chart deploys the API workload only. Run Postgres in-cluster or elsewhere, then pass **`databaseUrl.url`** (chart creates a Secret and **`envFrom`**) or **`databaseUrl.existingSecret`**. Details: [`k8s/README.md`](../k8s/README.md).
+**Kubernetes (optional):** Charts **`devops-api`** and **`devops-worker`** deploy those workloads only. Run Postgres (and **migrations**) yourself, then pass **`databaseUrl.url`** or **`databaseUrl.existingSecret`** on each release. Details: [`k8s/README.md`](../k8s/README.md).
 
 ---
 

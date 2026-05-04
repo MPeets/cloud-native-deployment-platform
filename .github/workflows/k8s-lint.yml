@@ -1,4 +1,4 @@
-name: K8s — lint Helm chart
+name: K8s — lint Helm charts
 
 on:
   push:
@@ -49,11 +49,22 @@ jobs:
       - name: Helm lint (devops-api)
         run: helm lint k8s/helm/devops-api/
 
+      - name: Helm lint (devops-worker)
+        run: helm lint k8s/helm/devops-worker/
+
       # kubectl apply --dry-run=client can still try to fetch OpenAPI from the apiserver (e.g. localhost:8080).
       # kubeconform validates rendered YAML against pinned K8s OpenAPI schemas — no cluster or kubeconfig needed.
-      - name: Helm template + kubeconform (rendered chart)
+      - name: Helm template + kubeconform (devops-api)
         run: >-
           helm template devops-api k8s/helm/devops-api/
+          | kubeconform
+          -kubernetes-version ${{ env.KUBE_SCHEMA_VERSION }}
+          -summary
+          -
+
+      - name: Helm template + kubeconform (devops-worker)
+        run: >-
+          helm template devops-worker k8s/helm/devops-worker/
           | kubeconform
           -kubernetes-version ${{ env.KUBE_SCHEMA_VERSION }}
           -summary
