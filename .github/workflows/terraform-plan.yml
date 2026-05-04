@@ -86,6 +86,27 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
 
+      - name: Terraform module tests
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          any=
+          tested=
+          for tftest in modules/*/*.tftest.hcl; do
+            any=1
+            mod_dir=$(dirname "${tftest}")
+            case " ${tested} " in
+              *" ${mod_dir} "*) continue ;;
+            esac
+            tested="${tested} ${mod_dir}"
+            echo "Running terraform test in ${mod_dir}"
+            terraform -chdir="${mod_dir}" init -backend=false -input=false
+            terraform -chdir="${mod_dir}" test
+          done
+          if [ -z "${any}" ]; then
+            echo "No module *.tftest.hcl files found; skipping."
+          fi
+
       - name: Terraform Init
         run: |
           ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
