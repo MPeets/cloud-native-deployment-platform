@@ -4,6 +4,95 @@ An end-to-end **DevOps sample**: a small **HTTP API** and **background worker** 
 
 This file is the **map of the repo**. For depth, follow the links below.
 
+## Architecture
+
+**Production (AWS):** Terraform-managed VPC, Internet-facing **ALB → ECS Fargate API** and a **private worker** service, **RDS PostgreSQL**, **VPC endpoints** (ECR, Logs, S3), **Secrets Manager** for `DATABASE_URL`, and **CloudWatch → SNS** for operational alarms. The **legacy EC2 + Docker** path (`enable_ec2`) is optional and off by default (dotted edge below). Portable **Kubernetes** packaging for the API only lives in [`k8s/`](k8s/); it is not part of this topology.
+
+```mermaid
+flowchart TB
+  subgraph vpc [VPC]
+    subgraph publicSubnets [Public subnets]
+      internet[Internet HTTP port 80]
+      alb[Application Load Balancer]
+    end
+    subgraph privateSubnets [Private subnets]
+      apiTasks[ECS Fargate API tasks]
+      workerTasks[ECS Fargate Worker tasks]
+      rds[RDS PostgreSQL]
+    end
+    endpoints[VPC endpoints: ECR, Logs, S3 gateway]
+    secrets[Secrets Manager DATABASE_URL]
+  end
+
+  cloudwatch[CloudWatch logs, metrics, alarms]
+  snsTopic[SNS topic]
+
+  internet --> alb
+  alb --> apiTasks
+  apiTasks --> rds
+  workerTasks --> rds
+  apiTasks -.-> secrets
+  workerTasks -.-> secrets
+  apiTasks -.-> endpoints
+  workerTasks -.-> endpoints
+
+  alb -.-> cloudwatch
+  apiTasks -.-> cloudwatch
+  workerTasks -.-> cloudwatch
+  rds -.-> cloudwatch
+  cloudwatch --> snsTopic
+
+  subgraph legacyPath [Legacy optional EC2 plus Docker]
+    ec2Host[Single EC2 systemd Docker]
+  end
+  internet -.->|enable_ec2 off by default| ec2Host
+```
+
+**Local development:** **Docker Compose** runs Postgres, a one-off **migrate** service, the **API** (published on port **3000**), and the **worker** on a shared network ([`docker/docker-compose.yml`](docker/docker-compose.yml)).
+
+```mermaid
+flowchart LR
+  subgraph compose [Docker Compose shared network]
+    db[(PostgreSQL db)]
+    migrate[Migrate one-off]
+    api[API Node]
+    worker[Worker]
+  end
+  host[Host at localhost:3000]
+
+  db --> migrate
+  migrate --> api
+  db --> worker
+  host -->|HTTP port 3000| api
+```
+
+**CI/CD:** **GitHub Actions** builds and pushes API and worker images to the registry, then uses **OIDC** to assume an **IAM role** and run **Terraform** / **ECS** rollouts without long-lived AWS keys in GitHub.
+
+```mermaid
+flowchart TB
+  subgraph gh [GitHub]
+    actions[Actions: ci, deploy, terraform workflows]
+    oidc[OIDC identity token]
+  end
+
+  registry[Container registry Docker Hub]
+
+  subgraph aws [AWS]
+    iam[IAM role OIDC trust]
+    tf[Terraform plan and apply]
+    ecs[ECS rollout new task definitions]
+    liveInfra[VPC, ALB, Fargate, RDS]
+  end
+
+  actions --> registry
+  actions --> oidc
+  oidc --> iam
+  iam --> tf
+  iam --> ecs
+  tf --> liveInfra
+  ecs --> liveInfra
+```
+
 ## What lives where
 
 | Part | Role | Docs |
