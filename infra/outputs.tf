@@ -43,3 +43,8 @@ output "github_actions_incident_logs_reader_role_arn" {
     : null
   )
 }
+
+output "ops_alerts_sns_topic_arn" {
+  description = "SNS topic ARN for operational CloudWatch alarms (subscribe endpoints or wire chat integrations here)."
+  value       = local.ops_notifications_enabled ? aws_sns_topic.ops_alerts[0].arn : null
+}
