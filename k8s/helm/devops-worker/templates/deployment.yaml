@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "devops-worker.fullname" . }}
+  labels:
+    {{- include "devops-worker.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+{{ toYaml .Values.strategy | indent 4 }}
+  selector:
+    matchLabels:
+      {{- include "devops-worker.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "devops-worker.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "devops-worker.serviceAccountName" . }}
+      containers:
+        - name: {{ include "devops-worker.name" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: WORKER_POLL_INTERVAL_MS
+              value: {{ .Values.worker.pollIntervalMs | quote }}
+            - name: WORKER_PROCESSING_MS
+              value: {{ .Values.worker.processingMs | quote }}
+            - name: WORKER_FAILURE_RATE
+              value: {{ .Values.worker.failureRate | quote }}
+          {{- if include "devops-worker.databaseSecretName" . }}
+          envFrom:
+            - secretRef:
+                name: {{ include "devops-worker.databaseSecretName" . }}
+          {{- end }}
+          resources:
+{{ toYaml .Values.resources | nindent 12 }}
