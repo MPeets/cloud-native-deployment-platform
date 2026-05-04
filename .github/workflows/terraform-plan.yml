@@ -3,6 +3,7 @@ name: Terraform Plan
 permissions:
   contents: read
   id-token: write
+  pull-requests: write
 
 on:
   pull_request:
@@ -100,6 +101,76 @@ jobs:
             -lock-timeout=10m \
             -var-file="envs/${ENV_NAME}/terraform.tfvars" \
             -out=tfplan
+
+      - name: Render Terraform plan for PR comment
+        if: success() && github.event_name == 'pull_request'
+        run: terraform show -no-color tfplan > tfplan-text.txt
+
+      - name: Comment Terraform plan on PR
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+
+            const planPath = path.join(
+              process.env.GITHUB_WORKSPACE,
+              "infra",
+              "tfplan-text.txt"
+            );
+            let plan = fs.readFileSync(planPath, "utf8");
+            const maxChars = 55_000;
+            if (plan.length > maxChars) {
+              plan =
+                plan.slice(0, maxChars) +
+                "\n\n… (truncated for GitHub comment size limit)";
+            }
+
+            const marker = "<!-- terraform-plan-pr-comment -->";
+            const body = [
+              "### Terraform Plan",
+              "",
+              "<details>",
+              `<summary>Expand plan (${plan.split("\n").length} lines)</summary>`,
+              "",
+              "```hcl",
+              plan.trimEnd(),
+              "```",
+              "",
+              "</details>",
+              "",
+              `<sub>${context.workflow} · ${context.sha.slice(0, 7)}</sub>`,
+              "",
+              marker,
+            ].join("\n");
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const prev = comments.find((c) => (c.body || "").includes(marker));
+
+            if (prev) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: prev.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
 
       - name: Upload Terraform Plan Artifact
         if: github.event_name == 'push'
