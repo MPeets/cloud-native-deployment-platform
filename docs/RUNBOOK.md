@@ -14,7 +14,7 @@ This document covers **how to verify the stack**, **what alerts mean**, **where 
 
 | Piece | Role |
 |--------|------|
-| **ALB** | Public HTTP `:80` → API target group only |
+| **ALB** | Public HTTP **:80** (and **HTTPS :443** when `alb_certificate_arn` is set in Terraform) → API target group only |
 | **ECS Fargate** | API service (behind ALB) + private **worker** service |
 | **RDS PostgreSQL** | Private DB; tasks read **`DATABASE_URL`** from **Secrets Manager** |
 | **CloudWatch** | ECS task logs, metrics, **alarms** |
@@ -41,6 +41,7 @@ Optional: **`AWS_INCIDENT_LOGS_READER_ROLE_ARN`** matches the **`github_actions_
 1. **HTTP** (replace host with Terraform output **`alb_dns_name`**):
    - `GET /` → **200**
    - `GET /health` → **200** and JSON `{"status":"ok"}`
+   - With **`alb_certificate_arn`** set in Terraform, the same paths work over **HTTPS** (**port 443**); **HTTP** redirects to HTTPS.
 2. **`scripts/health_check.py`**: checks ALB endpoints, optionally ECS running vs desired and recent log lines that look like errors. See [`scripts/README.md`](../scripts/README.md) for flags (`--skip-aws`, env overrides for cluster/service/log group).
 
 ---

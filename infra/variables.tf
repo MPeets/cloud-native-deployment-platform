@@ -74,6 +74,12 @@ variable "alb_health_check_path" {
   default = "/"
 }
 
+variable "alb_certificate_arn" {
+  type        = string
+  default     = null
+  description = "Optional ACM certificate ARN (same AWS region as the ALB). When set: HTTPS listener on 443 and HTTP 80 redirects to HTTPS. Omit for demo HTTP-only; production path is typically aws_acm_certificate + DNS validation then this ARN."
+}
+
 variable "ecs_health_check_grace_period_seconds" {
   type    = number
   default = 60
