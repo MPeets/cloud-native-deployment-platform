@@ -37,3 +37,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Secret name for DATABASE_URL: reference an existing Secret, or the chart-managed Secret when databaseUrl.url is set.
+*/}}
+{{- define "devops-api.databaseSecretName" -}}
+{{- if .Values.databaseUrl.existingSecret }}
+{{- .Values.databaseUrl.existingSecret }}
+{{- else if .Values.databaseUrl.url }}
+{{- printf "%s-database" (include "devops-api.fullname" .) }}
+{{- end }}
+{{- end }}

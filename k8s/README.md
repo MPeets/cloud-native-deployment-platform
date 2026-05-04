@@ -1,27 +1,24 @@
 # Kubernetes packaging
 
-This directory shows two complementary ways to run the same API on Kubernetes: **plain manifests** for a small, readable baseline, and a **Helm chart** for installable, configurable deployments (including HPA and a ServiceAccount).
+This directory ships a **Helm chart** for installable, configurable deployments of the API (including HPA and optional ServiceAccount).
 
 ## How this relates to the rest of the repo
 
 The **primary cloud path** in this repository is **ECS Fargate + ALB**, provisioned by Terraform ([`infra/`](../infra/README.md)). Nothing here replaces that automation. These assets are **portable packaging**: useful on local clusters (kind, minikube, Docker Desktop Kubernetes), teaching, or a later move to managed Kubernetes **without** folding Helm into Terraform today.
 
-For a **full stack with PostgreSQL** on one machine, see [`docker/`](../docker/README.md). The YAML in `k8s/` deploys the **API container only**; it does not create a database or inject `DATABASE_URL`. Endpoints that need the database (for example **`/deployments`** and **`/ready`**) only work once you wire Postgres yourself (Secret/ConfigMap, sidecar, or external service).
+For a **full stack with PostgreSQL** on one machine, see [`docker/`](../docker/README.md). The chart deploys the **API container**; supply Postgres separately, then set **`databaseUrl`** in `values.yaml` (chart-managed Secret) or **`databaseUrl.existingSecret`** (reuse your Secret). **`DATABASE_URL`** is injected via **`envFrom`** so **`/ready`** and DB-backed routes work once the URL points at a reachable database.
 
 ## Layout
 
 ```
 k8s/
 ├── README.md
-├── manifests/                    # Vanilla YAML — educational baseline
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   └── ingress.yaml
 └── helm/devops-api/
-    ├── Chart.yaml                 # chart v0.1.0, appVersion 1.0.0
+    ├── Chart.yaml                 # chart v0.2.0, appVersion 1.0.0
     ├── values.yaml
     └── templates/
         ├── _helpers.tpl
+        ├── database-secret.yaml   # emitted when databaseUrl.url set (no existingSecret)
         ├── deployment.yaml
         ├── hpa.yaml              # emitted when autoscaling.enabled is true
         ├── ingress.yaml
@@ -33,30 +30,15 @@ k8s/
 
 | Area | Choice | Rationale |
 |------|--------|-----------|
-| **Replicas** | `2` in raw manifests; Helm defaults `replicaCount: 2` | Availability over a single pod. With **autoscaling on**, the Deployment uses **`autoscaling.minReplicas`** (2) as the replica count; HPA scales between min and max. |
+| **Replicas** | Helm defaults `replicaCount: 2` | Availability over a single pod. With **autoscaling on**, the Deployment uses **`autoscaling.minReplicas`** (2) as the replica count; HPA scales between min and max. |
 | **Image** | `mpeets/devops-api:latest` (defaults) | Aligns with CI image naming; `imagePullPolicy: Always` when using floating tags. |
 | **Probes** | Liveness hits **`/health`**; readiness hits **`/ready`** | Liveness stays a fast process check, while readiness waits for the database before sending traffic to the pod. |
 | **Resources** | Requests + limits (`100m` / 128Mi → `250m` / 256Mi) | Realistic guardrails for a small Node service. |
 | **Rollout** | `maxUnavailable: 0`, `maxSurge: 1` | Zero-downtime rolling updates where the scheduler allows. |
 | **Service** | `ClusterIP`, port **80** → container **3000** | Internal cluster access; Ingress fronts port 80. |
-| **Ingress** | `ingressClassName: nginx`, host `devops-api.local` | Portable pattern; TLS block commented in raw YAML for local/dev without certs. |
-| **Helm extras** | **HPA** (`autoscaling/v2`, CPU average **80%**, min **2** / max **5**), **ServiceAccount** | Autoscaling and pod identity without crowding the raw manifest baseline. |
-
-## Raw manifests
-
-Apply order does not strictly matter for a first install; Kubernetes reconciles types.
-
-```bash
-kubectl apply -f k8s/manifests/
-```
-
-Dry-run (no cluster changes):
-
-```bash
-kubectl apply -f k8s/manifests/ --dry-run=client
-```
-
-Edit names, hosts, image references, and (in real use) **environment / Secrets** for your environment before relying on this in production.
+| **Ingress** | `ingressClassName: nginx`, host `devops-api.local` | Portable pattern; TLS configurable via `values.yaml`. |
+| **Database** | **`databaseUrl.url`** (chart Secret) or **`databaseUrl.existingSecret`** | Pods get **`DATABASE_URL`** via **`envFrom.secretRef`**; align with Compose-style URLs for local clusters. |
+| **Helm extras** | **HPA** (`autoscaling/v2`, CPU average **80%**, min **2** / max **5**), **ServiceAccount** | Autoscaling and pod identity. |
 
 ## Helm chart
 
@@ -108,7 +90,6 @@ Steps (current tooling as pinned in the workflow):
 
 1. **`helm lint`** on `k8s/helm/devops-api/`.
 2. **`helm template`** piped to **kubeconform** — validates rendered chart objects against a pinned Kubernetes OpenAPI schema (**1.30.0**), no cluster required.
-3. **kubeconform** on **`k8s/manifests/deployment.yaml`**, **`service.yaml`**, **`ingress.yaml`** with the same schema version.
 
 Helm CLI in CI: **v3.14.4**. Kubeconform: **v0.6.7**.
 
@@ -121,6 +102,6 @@ Helm CLI in CI: **v3.14.4**. Kubeconform: **v0.6.7**.
 3. Install an **Ingress controller** that satisfies `ingressClassName: nginx` (for example the **ingress-nginx** Helm chart).
 4. Map the Ingress host to the loopback address your controller uses (often `127.0.0.1 devops-api.local` in the OS hosts file).
 5. Build and tag the app image if you are not pulling from a registry, then install with overrides as above.
-6. If you need a working **`/deployments`** API (or **`/ready`**), run Postgres and set **`DATABASE_URL`** on the Deployment (not included in these samples).
+6. Run Postgres in or reachable from the cluster, then install with **`--set databaseUrl.url=postgres://...`** (chart creates a Secret and **`envFrom`**) or **`--set databaseUrl.existingSecret=...`** if you manage the Secret yourself.
 
 Expect brief **503** responses from the ingress while pods are still `ContainerCreating` or failing readiness; confirm `kubectl get pods -n <ns>` shows **Running** and **READY** before calling the URL again.

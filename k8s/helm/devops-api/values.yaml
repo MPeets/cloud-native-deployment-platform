@@ -19,6 +19,11 @@ service:
 
 containerPort: 3000
 
+# PostgreSQL connection for /ready and DB-backed routes. Prefer existingSecret in prod.
+databaseUrl:
+  existingSecret: ""
+  url: ""
+
 resources:
   limits:
     cpu: 250m

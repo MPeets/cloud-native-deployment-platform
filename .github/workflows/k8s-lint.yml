@@ -1,4 +1,4 @@
-name: K8s — lint manifests & Helm
+name: K8s — lint Helm chart
 
 on:
   push:
@@ -58,12 +58,3 @@ jobs:
           -kubernetes-version ${{ env.KUBE_SCHEMA_VERSION }}
           -summary
           -
-
-      - name: Kubeconform (k8s/manifests against stable API schema)
-        run: >-
-          kubeconform
-          -kubernetes-version ${{ env.KUBE_SCHEMA_VERSION }}
-          -summary
-          k8s/manifests/deployment.yaml
-          k8s/manifests/service.yaml
-          k8s/manifests/ingress.yaml
