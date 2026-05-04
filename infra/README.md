@@ -23,6 +23,7 @@ Keeping backend bootstrap resources out of the main root avoids Terraform trying
 - **Networking:** A dedicated **VPC** with two public and two **private** subnets (defaults in `variables.tf`), one **NAT gateway**, and **interface/gateway VPC endpoints** for ECR, CloudWatch Logs, and S3 when ECS is enabled.
 - **Remote state:** The main root uses the **S3 backend** defined in [`backend.tf`](./backend.tf), with environment-specific backend keys in `envs/dev/backend.hcl` and `envs/prod/backend.hcl`. If you fork the repo or use another AWS account, align `bootstrap/variables.tf` (or your bootstrap inputs), `backend.tf`, the files under `envs/`, and any CI variables with **your** bucket and region.
 - **GitHub Actions + AWS:** Besides the usual deploy role (documented at the repo root), Terraform can create a **least-privilege OIDC IAM role** that only allows **CloudWatch Logs filter** calls against the **ECS service log group**. That supports the **Incident log report** workflow (`.github/workflows/incident-log-report.yml`). It is on by default (`enable_github_incident_logs_reader_role = true`) when ECS is enabled. The role name includes `environment`; each Terraform environment gets its own ARN, so **`AWS_INCIDENT_LOGS_READER_ROLE_ARN` should match whichever env runs the workflow** (or duplicate the workflow with distinct variables). After apply, set **`AWS_INCIDENT_LOGS_READER_ROLE_ARN`** to the Terraform output **`github_actions_incident_logs_reader_role_arn`**. If you use a different GitHub repo, set **`github_actions_oidc_repository`** in `terraform.tfvars` (see below).
+- **Operational alerting:** With **ECS** or **RDS** enabled, Terraform creates an **SNS topic** and **CloudWatch alarms** for **ALB target 5xx**, **ECS API task count vs desired**, and **RDS free storage / CPU**. Details and the **`ops_alerts_sns_topic_arn`** output are in [**Operational alerting**](#operational-alerting-cloudwatch--sns) below.
 - **Automation elsewhere in the repo:** **Terraform plan/apply/destroy** and **drift reporting** run from GitHub Actions; drift uses [`scripts/terraform_drift_report.py`](../scripts/terraform_drift_report.py) against this directory. Set the repo variable **`TF_INFRA_ENVIRONMENT`** to **`dev`** or **`prod`** so workflows match `envs/<name>/`; when unset in CI scripts, **`prod`** is used (`${TF_INFRA_ENVIRONMENT:-prod}`).
 
 ## Local config (`terraform.tfvars`)
@@ -158,6 +159,21 @@ This stage fronts ECS tasks with an Application Load Balancer:
 - ECS log retention is configurable via `ecs_log_retention_days` (default `7`).
 - RDS defaults favor the smallest demo footprint: `db.t4g.micro`, 20 GiB encrypted storage, no automated backup retention, and deletion protection off.
 
+## Operational alerting (CloudWatch + SNS)
+
+When **`enable_ecs`** or **`enable_rds`** is true, Terraform provisions an **SNS topic** (`${name_prefix}-ops-alerts`) for operational notifications. After apply, use the Terraform output **`ops_alerts_sns_topic_arn`** when wiring subscriptions or chat integrations. **No subscriptions are created by default** (email/Slack/etc. need a one-time confirmation in AWS or an extra Terraform resource).
+
+**CloudWatch alarms** publish to that topic when the related resources exist (for example ALB/ECS alarms require `enable_ecs = true`; RDS alarms require `enable_rds = true`):
+
+| Alarm (resource name suffix) | What it detects |
+|-------------------------------|-----------------|
+| `alb-target-5xx` | Application Load Balancer **HTTPCode_Target_5XX_Count** sum over 5 minutes above a small threshold. |
+| `ecs-api-task-shortfall` | ECS API service **running task count** below **desired** (metric math), two consecutive 1-minute evaluations. |
+| `rds-free-storage-low` | RDS **FreeStorageSpace** average over 5 minutes below **2 GiB**. |
+| `rds-cpu-high` | RDS **CPUUtilization** average over 5 minutes above **80%** for two consecutive periods. |
+
+Tune thresholds and evaluation windows in the Terraform files `cloudwatch_alarm_*.tf` if your environment needs quieter or tighter alerting.
+
 ## Network baseline
 
 This stack now creates a small custom network foundation:
@@ -180,6 +196,7 @@ After a successful apply (with ECS enabled), these are the outputs people and au
 | `alb_dns_name` | Public DNS name of the load balancer (main HTTP entry point for the API). |
 | `rds_endpoint`, `database_url_secret_arn` | Managed PostgreSQL endpoint and the Secrets Manager ARN injected into ECS tasks. |
 | `github_actions_incident_logs_reader_role_arn` | ARN to paste into GitHub as `AWS_INCIDENT_LOGS_READER_ROLE_ARN` when the incident-logs role is created. |
+| `ops_alerts_sns_topic_arn` | SNS topic for operational alarms (subscribe for email/chat/PagerDuty); null when both ECS and RDS are disabled. |
 | `vpc_id`, `public_subnet_ids`, `private_subnet_ids` | Network identifiers for extensions or troubleshooting. |
 | `nat_gateway_id`, `vpc_endpoint_ids` | NAT and VPC endpoint resources when ECS is on. |
 | `public_ip` | Set only when `enable_ec2` is true (legacy VM). |
