@@ -141,6 +141,7 @@ The IAM **trust policy** for `AWS_ROLE_TO_ASSUME` must allow `token.actions.gith
 
 ## Related documentation
 
+- **Operations runbook:** [`docs/RUNBOOK.md`](docs/RUNBOOK.md)
 - **Bootstrap and drift:** [`infra/README.md`](infra/README.md)
 - **Local full stack:** [`docker/README.md`](docker/README.md)
 - **K8s-only packaging:** [`k8s/README.md`](k8s/README.md)
