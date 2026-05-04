@@ -1,6 +1,7 @@
 {
   "name": "cloud-native-deployment-worker",
   "version": "1.0.0",
+  "description": "Polls Postgres and advances deployment row lifecycle for demos",
   "private": true,
   "type": "commonjs",
   "scripts": {

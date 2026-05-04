@@ -1,8 +1,9 @@
 aws_region                = "eu-north-1"
 environment               = "dev"
 instance_type             = "t3.micro"
-docker_image              = "mpeets/devops-api:latest"
-worker_image              = "mpeets/devops-worker:latest"
+# Locally: set immutable tags for both. In GitHub Actions, workflows set TF_VAR_* from the latest successful ci.yml on main.
+docker_image              = "YOUR_DOCKERHUB_USER/devops-api:tfvars-placeholder-use-tf-var"
+worker_image              = "YOUR_DOCKERHUB_USER/devops-worker:tfvars-placeholder-use-tf-var"
 ami_id                    = "ami-0c1ac8a41498c1a9c"
 ssh_allowed_cidrs         = ["203.0.113.10/32"] # Replace with your public IPv4 /32
 enable_ecs                = true

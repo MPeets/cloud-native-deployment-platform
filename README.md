@@ -36,8 +36,7 @@ Workflows assume an IAM role via **OIDC**—no long-lived AWS access keys stored
 - `TF_INFRA_ENVIRONMENT` — `dev` or `prod`; selects `infra/envs/<name>/` for Terraform **`-backend-config`** and **`-var-file`** in CI (scripts default to **`prod`** when unset)
 - `TF_AWS_REGION` — e.g. `eu-north-1`
 - `TF_AMI_ID` — AMI for EC2 (still required as a Terraform variable when EC2 is disabled)
-- `TF_DOCKER_IMAGE` — API image reference for Terraform (e.g. manual apply); image build workflows may derive tags from the commit
-- `TF_WORKER_IMAGE` — worker image reference for manual Terraform workflows; defaults locally to the matching `devops-worker` tag when omitted
+- **Container images for Terraform in CI** — plan/apply/drift/destroy resolve `TF_VAR_docker_image` / `TF_VAR_worker_image` automatically from the **latest successful [`ci.yml`](.github/workflows/ci.yml) run on `main`** (same **Git SHA** tagging as deploy) using `DOCKERHUB_USERNAME`; you do not need `TF_DOCKER_IMAGE` / `TF_WORKER_IMAGE` variables
 - `TF_ENABLE_ECS` — `true` for Fargate
 - `TF_ENABLE_EC2` — `false` unless enabling the legacy VM path
 

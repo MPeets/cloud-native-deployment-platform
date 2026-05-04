@@ -2,6 +2,7 @@ name: Terraform Destroy
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 on:
@@ -29,8 +30,6 @@ jobs:
     env:
       TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT }}
       TF_VAR_ami_id: ${{ vars.TF_AMI_ID }}
-      TF_VAR_docker_image: ${{ vars.TF_DOCKER_IMAGE }}
-      TF_VAR_worker_image: ${{ vars.TF_WORKER_IMAGE }}
       TF_VAR_database_url_secret_arn: ${{ secrets.TF_DATABASE_URL_SECRET_ARN }}
       TF_VAR_ssh_allowed_cidrs: ${{ secrets.TF_SSH_ALLOWED_CIDRS }}
       TF_VAR_aws_region: ${{ vars.TF_AWS_REGION }}
@@ -44,6 +43,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Resolve container images from latest Docker CI on main
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: bash "${GITHUB_WORKSPACE}/scripts/ci_resolve_terraform_container_images.sh"
+
+      - name: Require immutable container image refs
+        run: bash "${GITHUB_WORKSPACE}/scripts/ci_require_immutable_container_tags.sh"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v6

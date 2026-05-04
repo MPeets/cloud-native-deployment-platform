@@ -63,7 +63,6 @@ jobs:
           context: ./app
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -74,7 +73,6 @@ jobs:
           context: ./worker
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/devops-worker:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/devops-worker:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
