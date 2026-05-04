@@ -3,18 +3,18 @@ mock_provider "aws" {
 }
 
 variables {
-  name_prefix            = "tf-test-ecs"
-  common_tags            = {
+  name_prefix = "tf-test-ecs"
+  common_tags = {
     Environment = "test"
     Project     = "portfolio"
   }
-  vpc_id                   = "vpc-0tfecsclaaaaaaaaaaaaa"
-  private_subnet_ids       = ["subnet-0tfprivate1aaaaaaaa", "subnet-0tfprivate2aaaaaaaa"]
-  private_route_table_id   = "rtb-0tfrouteaaaaaaaaaaaaa"
-  aws_region               = "us-east-1"
-  alb_security_group_id    = "sg-0tfalbssssssssssssss"
-  app_port                 = 8080
-  ecs_log_retention_days   = 7
+  vpc_id                 = "vpc-0tfecsclaaaaaaaaaaaaa"
+  private_subnet_ids     = ["subnet-0tfprivate1aaaaaaaa", "subnet-0tfprivate2aaaaaaaa"]
+  private_route_table_id = "rtb-0tfrouteaaaaaaaaaaaaa"
+  aws_region             = "us-east-1"
+  alb_security_group_id  = "sg-0tfalbssssssssssssss"
+  app_port               = 8080
+  ecs_log_retention_days = 7
 }
 
 run "plan_cluster_log_group_and_vpc_endpoints" {

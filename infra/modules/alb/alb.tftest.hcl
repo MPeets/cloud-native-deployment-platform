@@ -3,15 +3,15 @@ mock_provider "aws" {
 }
 
 variables {
-  name_prefix             = "tf-test-alb"
-  common_tags             = {
+  name_prefix = "tf-test-alb"
+  common_tags = {
     Environment = "test"
     Project     = "portfolio"
   }
-  vpc_id                  = "vpc-0tfalbtestaaaaaaaa"
-  public_subnet_ids       = ["subnet-0tfpublic1aaaaaaaa", "subnet-0tfpublic2aaaaaaaa"]
-  app_port                = 8080
-  alb_health_check_path   = "/health"
+  vpc_id                = "vpc-0tfalbtestaaaaaaaa"
+  public_subnet_ids     = ["subnet-0tfpublic1aaaaaaaa", "subnet-0tfpublic2aaaaaaaa"]
+  app_port              = 8080
+  alb_health_check_path = "/health"
 }
 
 run "plan_internet_facing_http_forwarding" {
