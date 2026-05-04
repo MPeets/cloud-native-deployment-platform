@@ -1,7 +1,8 @@
 aws_region               = "eu-north-1"
 environment              = "dev"
-docker_image             = "mpeets/devops-api:latest"
-worker_image             = "mpeets/devops-worker:latest"
+# In GitHub Actions, TF_VAR_* images resolve from the latest green Docker CI on main. Do not use :latest.
+docker_image             = "mpeets/devops-api:tfvars-placeholder-use-tf-var"
+worker_image             = "mpeets/devops-worker:tfvars-placeholder-use-tf-var"
 ami_id                   = "ami-0c1ac8a41498c1a9c"
 ssh_allowed_cidrs        = ["203.0.113.10/32"]
 enable_ecs               = true

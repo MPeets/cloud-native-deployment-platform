@@ -15,7 +15,8 @@ variable "instance_type" {
 }
 
 variable "docker_image" {
-  type = string
+  type        = string
+  description = "Container image for the API task. Use an immutable tag (Git SHA, semver) or digest—not :latest."
 }
 
 variable "worker_image" {
