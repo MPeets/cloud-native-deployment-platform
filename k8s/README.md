@@ -6,7 +6,7 @@ This directory ships a **Helm chart** for installable, configurable deployments 
 
 The **primary cloud path** in this repository is **ECS Fargate + ALB**, provisioned by Terraform ([`infra/`](../infra/README.md)). Nothing here replaces that automation. These assets are **portable packaging**: useful on local clusters (kind, minikube, Docker Desktop Kubernetes), teaching, or a later move to managed Kubernetes **without** folding Helm into Terraform today.
 
-For a **full stack with PostgreSQL** on one machine, see [`docker/`](../docker/README.md). The YAML in `k8s/` deploys the **API container only**; it does not create a database or inject `DATABASE_URL`. Endpoints that need the database (for example **`/deployments`** and **`/ready`**) only work once you wire Postgres yourself (Secret/ConfigMap, sidecar, or external service).
+For a **full stack with PostgreSQL** on one machine, see [`docker/`](../docker/README.md). The chart deploys the **API container**; supply Postgres separately, then set **`databaseUrl`** in `values.yaml` (chart-managed Secret) or **`databaseUrl.existingSecret`** (reuse your Secret). **`DATABASE_URL`** is injected via **`envFrom`** so **`/ready`** and DB-backed routes work once the URL points at a reachable database.
 
 ## Layout
 
@@ -14,10 +14,11 @@ For a **full stack with PostgreSQL** on one machine, see [`docker/`](../docker/R
 k8s/
 ├── README.md
 └── helm/devops-api/
-    ├── Chart.yaml                 # chart v0.1.0, appVersion 1.0.0
+    ├── Chart.yaml                 # chart v0.2.0, appVersion 1.0.0
     ├── values.yaml
     └── templates/
         ├── _helpers.tpl
+        ├── database-secret.yaml   # emitted when databaseUrl.url set (no existingSecret)
         ├── deployment.yaml
         ├── hpa.yaml              # emitted when autoscaling.enabled is true
         ├── ingress.yaml
@@ -36,6 +37,7 @@ k8s/
 | **Rollout** | `maxUnavailable: 0`, `maxSurge: 1` | Zero-downtime rolling updates where the scheduler allows. |
 | **Service** | `ClusterIP`, port **80** → container **3000** | Internal cluster access; Ingress fronts port 80. |
 | **Ingress** | `ingressClassName: nginx`, host `devops-api.local` | Portable pattern; TLS configurable via `values.yaml`. |
+| **Database** | **`databaseUrl.url`** (chart Secret) or **`databaseUrl.existingSecret`** | Pods get **`DATABASE_URL`** via **`envFrom.secretRef`**; align with Compose-style URLs for local clusters. |
 | **Helm extras** | **HPA** (`autoscaling/v2`, CPU average **80%**, min **2** / max **5**), **ServiceAccount** | Autoscaling and pod identity. |
 
 ## Helm chart
@@ -100,6 +102,6 @@ Helm CLI in CI: **v3.14.4**. Kubeconform: **v0.6.7**.
 3. Install an **Ingress controller** that satisfies `ingressClassName: nginx` (for example the **ingress-nginx** Helm chart).
 4. Map the Ingress host to the loopback address your controller uses (often `127.0.0.1 devops-api.local` in the OS hosts file).
 5. Build and tag the app image if you are not pulling from a registry, then install with overrides as above.
-6. If you need a working **`/deployments`** API (or **`/ready`**), run Postgres and set **`DATABASE_URL`** for the pods.
+6. Run Postgres in or reachable from the cluster, then install with **`--set databaseUrl.url=postgres://...`** (chart creates a Secret and **`envFrom`**) or **`--set databaseUrl.existingSecret=...`** if you manage the Secret yourself.
 
 Expect brief **503** responses from the ingress while pods are still `ContainerCreating` or failing readiness; confirm `kubectl get pods -n <ns>` shows **Running** and **READY** before calling the URL again.

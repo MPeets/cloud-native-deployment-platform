@@ -30,6 +30,11 @@ spec:
               containerPort: {{ .Values.containerPort }}
           resources:
 {{ toYaml .Values.resources | nindent 12 }}
+          {{- if include "devops-api.databaseSecretName" . }}
+          envFrom:
+            - secretRef:
+                name: {{ include "devops-api.databaseSecretName" . }}
+          {{- end }}
           livenessProbe:
 {{ toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:
