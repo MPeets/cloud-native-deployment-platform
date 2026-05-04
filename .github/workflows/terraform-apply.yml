@@ -53,6 +53,7 @@ jobs:
 
       - name: Resolve container images from latest Docker CI on main
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: bash "${GITHUB_WORKSPACE}/scripts/ci_resolve_terraform_container_images.sh"
 
