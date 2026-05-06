@@ -27,7 +27,7 @@ Keeping backend bootstrap resources out of the main root avoids Terraform trying
 
 ## Local config (`terraform.tfvars`)
 
-This repo includes `terraform.tfvars.example` as a template. Create your local `terraform.tfvars` from it (do not commit it; it can contain personal IPs).
+This repo includes `terraform.tfvars.example` as a template. Create your local `terraform.tfvars` from it (do not commit it; it may hold account-specific image tags or other overrides you prefer not to track).
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
