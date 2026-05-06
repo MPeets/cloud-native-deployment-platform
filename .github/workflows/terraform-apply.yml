@@ -71,23 +71,17 @@ jobs:
           ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
           terraform init -backend-config="envs/${ENV_NAME}/backend.hcl" -reconfigure
 
+      # Always plan in this job after resolving TF_VAR_* image pins.
+      # A saved tfplan serializes root module variable values: `terraform apply tfplan`
+      # ignores differing TF_* when applying another job's artifact—which deployed
+      # placeholder tfvars tags while env wanted real SHAs → failed ECS pulls / ALB 503.
       - name: Terraform Plan
-        if: github.event_name == 'workflow_dispatch'
         run: |
           ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
           terraform plan \
             -lock-timeout=10m \
             -var-file="envs/${ENV_NAME}/terraform.tfvars" \
             -out=tfplan
-
-      - name: Download Terraform Plan Artifact
-        if: github.event_name == 'workflow_run'
-        uses: actions/download-artifact@v7
-        with:
-          name: terraform-plan-${{ github.event.workflow_run.head_sha }}
-          path: infra
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
 
       - name: Terraform Apply
         run: terraform apply -lock-timeout=10m tfplan

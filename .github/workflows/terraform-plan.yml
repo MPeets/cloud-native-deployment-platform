@@ -199,6 +199,8 @@ jobs:
               });
             }
 
+      # Optional audit trail only: Terraform Apply does not consume this; it replans locally
+      # with the same image resolver so TF_VAR_* values match tfplan contents.
       - name: Upload Terraform Plan Artifact
         if: github.event_name == 'push'
         uses: actions/upload-artifact@v6
