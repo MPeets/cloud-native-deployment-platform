@@ -6,6 +6,7 @@ on:
     paths:
       - "app/**"
       - "worker/**"
+  workflow_dispatch:
 
 concurrency:
   group: ci-docker-${{ github.ref }}
