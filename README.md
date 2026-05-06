@@ -1,12 +1,12 @@
 # cloud-native-deployment-platform
 
-An end-to-end **DevOps sample**: a small **HTTP API** and **background worker** backed by **PostgreSQL**, packaged in **Docker**, deployed to **AWS** (ECS Fargate + load balancer) with **Terraform**, and validated by **GitHub Actions**. The API and worker are also packaged as **Helm charts** under [`k8s/helm/`](k8s/helm/) for local clusters or a future move to managed Kubernetes—without changing the primary ECS design.
+An end-to-end **DevOps sample**: a small **HTTP API** and **background worker** backed by **PostgreSQL**, packaged in **Docker**, deployed to **AWS** (ECS Fargate + load balancer) with **Terraform**, and validated by **GitHub Actions**.
 
 This file is the **map of the repo**. For depth, follow the links below.
 
 ## Architecture
 
-**Production (AWS):** Terraform-managed VPC, Internet-facing **ALB → ECS Fargate API** and a **private worker** service, **RDS PostgreSQL**, **VPC endpoints** (ECR, Logs, S3), **Secrets Manager** for `DATABASE_URL`, and **CloudWatch → SNS** for operational alarms. The ALB is **HTTP-only (port 80)** by default for a cheap demo; enable TLS by setting **`alb_certificate_arn`** (validated **ACM** certificate in the **same region** as the ALB—usually **`aws_acm_certificate`** with DNS validation, then a **listener on 443** and **HTTP→HTTPS redirect**, which this repo wires when that ARN is set). The **legacy EC2 + Docker** path (`enable_ec2`) is optional and off by default (dotted edge below). Portable **Kubernetes** packaging (**Helm**: [`k8s/helm/devops-api`](k8s/helm/devops-api), [`k8s/helm/devops-worker`](k8s/helm/devops-worker)); supply Postgres separately and set **`databaseUrl`** per chart or share **`databaseUrl.existingSecret`**—see [`k8s/README.md`](k8s/README.md). It is not part of this topology.
+**Production (AWS):** Terraform-managed VPC, Internet-facing **ALB → ECS Fargate API** and a **private worker** service, **RDS PostgreSQL**, **VPC endpoints** (ECR, Logs, S3), **Secrets Manager** for `DATABASE_URL`, and **CloudWatch → SNS** for operational alarms. The ALB is **HTTP-only (port 80)** by default for a cheap demo; enable TLS by setting **`alb_certificate_arn`** (validated **ACM** certificate in the **same region** as the ALB—usually **`aws_acm_certificate`** with DNS validation, then a **listener on 443** and **HTTP→HTTPS redirect**, which this repo wires when that ARN is set).
 
 ```mermaid
 flowchart TB
@@ -41,11 +41,6 @@ flowchart TB
   workerTasks -.-> cloudwatch
   rds -.-> cloudwatch
   cloudwatch --> snsTopic
-
-  subgraph legacyPath [Legacy optional EC2 plus Docker]
-    ec2Host[Single EC2 systemd Docker]
-  end
-  internet -.->|enable_ec2 off by default| ec2Host
 ```
 
 **Local development:** **Docker Compose** runs Postgres, a one-off **migrate** service, the **API** (published on port **3000**), and the **worker** on a shared network ([`docker/docker-compose.yml`](docker/docker-compose.yml)).
@@ -101,10 +96,9 @@ flowchart TB
 | **[`worker/`](worker/)** | Polls DB; moves deployments from pending through running to succeeded/failed (demo lifecycle). | [`worker/README.md`](worker/README.md) |
 | **[`migrations/`](migrations/)** | Numbered SQL migrations. | Applied via [`scripts/run_migrations.py`](scripts/run_migrations.py); see [`scripts/README.md`](scripts/README.md) and [`docker/README.md`](docker/README.md). |
 | **[`docker/`](docker/)** | Docker Compose: Postgres, migrations, API, worker. | [`docker/README.md`](docker/README.md) |
-| **[`infra/`](infra/)** | Terraform: VPC, ECS Fargate, ALB, optional EC2 legacy, OIDC-friendly IAM, **CloudWatch alarms + SNS** for ops. | [`infra/README.md`](infra/README.md) |
-| **[`k8s/`](k8s/)** | Helm charts for **API** + **worker** (portable packaging; **`DATABASE_URL`** via **`databaseUrl`**). | [`k8s/README.md`](k8s/README.md) |
+| **[`infra/`](infra/)** | Terraform: VPC, ECS Fargate, ALB, OIDC-friendly IAM, **CloudWatch alarms + SNS** for ops. | [`infra/README.md`](infra/README.md) |
 | **[`scripts/`](scripts/)** | Python helpers: drift report, migrations runner, deploy health check, incident log pull. | [`scripts/README.md`](scripts/README.md) |
-| **[`.github/workflows/`](.github/workflows/)** | CI/CD: image build, Terraform plan/apply/destroy, drift report, K8s lint, script lint, incident reports, etc. | Open the YAML files for triggers and inputs. |
+| **[`.github/workflows/`](.github/workflows/)** | CI/CD: image build, Terraform plan/apply/destroy, drift report, script lint, incident reports, etc. | Open the YAML files for triggers and inputs. |
 
 ## End-to-end flow (high level)
 
@@ -113,7 +107,7 @@ flowchart TB
 3. **CloudWatch** collects logs and can raise **alarms** (ALB 5xx, ECS capacity, RDS storage/CPU) on an **SNS topic** for notifications; **scripts** can smoke-test the ALB, check ECS, scan recent logs, or summarize Terraform drift.
 4. **Locally**, **Compose** brings up DB + migrate + API + worker so you can work without AWS.
 
-**Production path:** ECS Fargate + ALB (Terraform). **Legacy path:** single EC2 + Docker (optional, off by default).
+**Production path:** ECS Fargate + ALB (Terraform).
 
 ## GitHub Actions and AWS (OIDC)
 
@@ -124,15 +118,12 @@ Workflows assume an IAM role via **OIDC**—no long-lived AWS access keys stored
 - `AWS_ROLE_TO_ASSUME` — ARN for the main deploy/infrastructure role
 - `TF_INFRA_ENVIRONMENT` — `dev` or `prod`; selects `infra/envs/<name>/` for Terraform **`-backend-config`** and **`-var-file`** in CI (scripts default to **`prod`** when unset)
 - `TF_AWS_REGION` — e.g. `eu-north-1`
-- `TF_AMI_ID` — AMI for EC2 (still required as a Terraform variable when EC2 is disabled)
 - **Container images for Terraform in CI** — plan/apply/drift/destroy resolve `TF_VAR_docker_image` / `TF_VAR_worker_image` automatically from the **latest successful [`ci.yml`](.github/workflows/ci.yml) run on `main`** (same **Git SHA** tagging as deploy) using `DOCKERHUB_USERNAME`; you do not need `TF_DOCKER_IMAGE` / `TF_WORKER_IMAGE` variables
 - `TF_ENABLE_ECS` — `true` for Fargate
-- `TF_ENABLE_EC2` — `false` unless enabling the legacy VM path
 
 **Secrets:**
 
 - `TF_DATABASE_URL_SECRET_ARN` — optional ARN of an existing AWS Secrets Manager `DATABASE_URL` secret; leave unset when Terraform creates RDS
-- `TF_SSH_ALLOWED_CIDRS` — JSON array of CIDRs for SSH when EC2 is enabled, e.g. `["203.0.113.10/32"]`
 - `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` — Docker Hub login for building and pushing the API and worker images (see [`ci.yml`](.github/workflows/ci.yml))
 
 **Optional (incident log workflow):** set **`AWS_INCIDENT_LOGS_READER_ROLE_ARN`** from Terraform output `github_actions_incident_logs_reader_role_arn` for the **same** environment Terraform provisions (roles are scoped by `environment` in app tags). See [`infra/README.md`](infra/README.md).
@@ -144,5 +135,4 @@ The IAM **trust policy** for `AWS_ROLE_TO_ASSUME` must allow `token.actions.gith
 - **Operations runbook:** [`docs/RUNBOOK.md`](docs/RUNBOOK.md)
 - **Bootstrap and drift:** [`infra/README.md`](infra/README.md)
 - **Local full stack:** [`docker/README.md`](docker/README.md)
-- **K8s-only packaging:** [`k8s/README.md`](k8s/README.md)
 - **Operator / automation scripts:** [`scripts/README.md`](scripts/README.md)

@@ -9,11 +9,6 @@ variable "environment" {
   description = "Deployment environment name used for resource naming and tags."
 }
 
-variable "instance_type" {
-  type    = string
-  default = "t3.micro"
-}
-
 variable "docker_image" {
   type        = string
   description = "Container image for the API task. Use an immutable tag (Git SHA, semver) or digest—not :latest."
@@ -31,27 +26,9 @@ variable "database_url_secret_arn" {
   description = "Optional AWS Secrets Manager secret ARN containing the DATABASE_URL value for ECS tasks. When unset and enable_rds is true, Terraform creates one from the managed RDS instance."
 }
 
-variable "key_name" {
-  type    = string
-  default = "devops-key"
-}
-
-variable "ami_id" {
-  type = string
-}
-
-variable "ssh_allowed_cidrs" {
-  type = list(string)
-}
-
 variable "enable_ecs" {
   type    = bool
   default = true
-}
-
-variable "enable_ec2" {
-  type    = bool
-  default = false
 }
 
 variable "app_port" {

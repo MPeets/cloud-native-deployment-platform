@@ -13,5 +13,5 @@ crash.log
 # Windows: accidental file created by bad redirects (e.g. `> NUL` in Git Bash)
 /NUL
 
-# Local Terraform variable overrides (contains personal IPs, etc.)
+# Local Terraform variable overrides (not tracked)
 infra/terraform.tfvars
