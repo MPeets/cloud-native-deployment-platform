@@ -25,7 +25,7 @@ jobs:
   plan:
     runs-on: ubuntu-latest
     env:
-      TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT }}
+      TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT || 'dev' }}
       TF_VAR_database_url_secret_arn: ${{ secrets.TF_DATABASE_URL_SECRET_ARN }}
       TF_VAR_aws_region: ${{ vars.TF_AWS_REGION }}
       TF_VAR_enable_ecs: ${{ vars.TF_ENABLE_ECS }}
@@ -106,7 +106,7 @@ jobs:
 
       - name: Terraform Init
         run: |
-          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-dev}"
           terraform init -backend-config="envs/${ENV_NAME}/backend.hcl" -reconfigure
 
       - name: Terraform Format Check
@@ -123,7 +123,7 @@ jobs:
 
       - name: Terraform Plan
         run: |
-          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-dev}"
           terraform plan \
             -lock-timeout=10m \
             -var-file="envs/${ENV_NAME}/terraform.tfvars" \

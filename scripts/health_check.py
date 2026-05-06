@@ -359,13 +359,13 @@ def _env_truthy(name: str) -> bool:
 
 
 def _effective_infra_environment() -> str:
-    """Match infra/envs naming: terraform `environment` and CI `${TF_INFRA_ENVIRONMENT:-prod}`."""
+    """Match infra/envs naming: terraform `environment` and CI `${TF_INFRA_ENVIRONMENT:-dev}`."""
     raw = (
         os.environ.get("TF_INFRA_ENVIRONMENT")
         or os.environ.get("TF_ENV")
         or ""
     ).strip().lower()
-    return raw if raw else "prod"
+    return raw if raw else "dev"
 
 
 def _default_name_prefix() -> str:
@@ -428,7 +428,7 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         default=_default_ecs_cluster(),
         help=(
             "ECS cluster (default: ECS_CLUSTER or devops-api-<TF_INFRA_ENVIRONMENT>, "
-            "prod if unset; matches Terraform cluster name_prefix)"
+            "dev if unset; matches Terraform cluster name_prefix)"
         ),
     )
     parser.add_argument(

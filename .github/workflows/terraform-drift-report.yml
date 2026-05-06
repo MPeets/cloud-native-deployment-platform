@@ -18,7 +18,7 @@ jobs:
   drift-report:
     runs-on: ubuntu-latest
     env:
-      TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT }}
+      TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT || 'dev' }}
       TF_VAR_aws_region: ${{ vars.TF_AWS_REGION }}
       TF_VAR_enable_ecs: ${{ vars.TF_ENABLE_ECS }}
 
@@ -54,13 +54,13 @@ jobs:
       - name: Terraform Init
         working-directory: infra
         run: |
-          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-dev}"
           terraform init -backend-config="envs/${ENV_NAME}/backend.hcl" -reconfigure
 
       - name: Generate drift report
         id: drift
         run: |
-          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-dev}"
           export TF_CLI_ARGS_plan="-var-file=envs/${ENV_NAME}/terraform.tfvars"
           set +e
           python scripts/terraform_drift_report.py \
