@@ -57,6 +57,26 @@ Required values without usable defaults:
 - `docker_image` — API container image the ECS API task runs
 - `worker_image` — worker container image the ECS worker task runs; when omitted, Terraform derives the matching `devops-worker` tag from `docker_image`
 
+## GitHub Actions deploy image selection
+
+The Terraform workflows resolve ECS image pins at run time and pass them as `TF_VAR_docker_image` and `TF_VAR_worker_image`. The default is still the latest successful `CI - Build & Push Docker Images` run on `main`, which keeps the normal mainline deploy path hands-off.
+
+For rollback or preview work, run `.github/workflows/ci.yml` for the commit you want to deploy, then copy the full commit SHA from the workflow summary. The Docker tags are immutable and use that SHA:
+
+```bash
+DOCKERHUB_USERNAME/devops-api:<git-sha>
+DOCKERHUB_USERNAME/devops-worker:<git-sha>
+```
+
+Manual Terraform runs accept:
+
+- `image_sha` — optional full 40-character commit SHA for the Docker image tags; leave blank to use the latest successful Docker CI run on `main`
+- `infra_environment` — optional `envs/<name>` directory to plan/apply; leave blank to use the `TF_INFRA_ENVIRONMENT` repository variable or `dev`
+
+Rollback production by running `Terraform Apply` on `main`, setting `confirm_apply` to `apply`, `infra_environment` to `prod`, and `image_sha` to the last known good commit SHA. Preview a feature branch by first running or waiting for Docker CI on that branch, then running `Terraform Plan` or `Terraform Apply` with the branch commit SHA and the target non-production environment.
+
+Manual `Terraform Plan` runs do not chain into automatic apply. Automatic apply remains limited to successful push-triggered plans on `main`.
+
 ## First-Time Bootstrap (No Existing Backend Bucket)
 
 1. Create the remote state bucket from the bootstrap root:
