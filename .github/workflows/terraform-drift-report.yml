@@ -19,11 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT }}
-      TF_VAR_ami_id: ${{ vars.TF_AMI_ID }}
-      TF_VAR_ssh_allowed_cidrs: ${{ secrets.TF_SSH_ALLOWED_CIDRS }}
       TF_VAR_aws_region: ${{ vars.TF_AWS_REGION }}
       TF_VAR_enable_ecs: ${{ vars.TF_ENABLE_ECS }}
-      TF_VAR_enable_ec2: ${{ vars.TF_ENABLE_EC2 }}
 
     steps:
       - name: Checkout
