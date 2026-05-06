@@ -1,5 +1,5 @@
-aws_region  = "eu-north-1"
-environment = "dev"
+aws_region               = "eu-north-1"
+environment              = "dev"
 enable_ecs               = true
 enable_rds               = true
 ecs_worker_desired_count = 1

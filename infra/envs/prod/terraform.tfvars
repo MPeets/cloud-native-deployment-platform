@@ -1,5 +1,5 @@
-aws_region  = "eu-north-1"
-environment = "prod"
+aws_region                = "eu-north-1"
+environment               = "prod"
 enable_ecs                = true
 enable_rds                = true
 rds_backup_retention_days = 7
