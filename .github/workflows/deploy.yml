@@ -20,7 +20,7 @@ jobs:
 
     environment: production
     env:
-      TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT }}
+      TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT || 'dev' }}
       # Immutable tags: same commit SHA as CI build/push that triggered this run (not :latest).
       TF_VAR_docker_image: "${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.event.workflow_run.head_sha }}"
       TF_VAR_worker_image: "${{ secrets.DOCKERHUB_USERNAME }}/devops-worker:${{ github.event.workflow_run.head_sha }}"
@@ -49,12 +49,12 @@ jobs:
 
       - name: Terraform Init
         run: |
-          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-dev}"
           terraform init -backend-config="envs/${ENV_NAME}/backend.hcl" -reconfigure
 
       - name: Deploy image
         run: |
-          ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
+          ENV_NAME="${TF_INFRA_ENVIRONMENT:-dev}"
           terraform apply \
             -auto-approve \
             -lock-timeout=10m \
