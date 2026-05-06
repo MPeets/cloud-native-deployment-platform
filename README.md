@@ -4,6 +4,14 @@ An end-to-end **DevOps sample**: a small **HTTP API** and **background worker** 
 
 This file is the **map of the repo**. For depth, follow the links below.
 
+## Operational automation
+
+This project is more than an ECS deployment demo: it includes operator-focused automation for detecting infrastructure drift and pulling incident evidence from AWS.
+
+- **Terraform drift detector:** [`scripts/terraform_drift_report.py`](scripts/terraform_drift_report.py) runs `terraform plan -detailed-exitcode -json`, filters the noisy plan stream, and turns creates/updates/replacements/deletes into a short human-readable report. [`.github/workflows/terraform-drift-report.yml`](.github/workflows/terraform-drift-report.yml) runs it on weekday mornings and on demand, writes the result to the GitHub Actions job summary, and uploads the report artifact.
+- **Incident log pull:** [`scripts/incident_log_report.py`](scripts/incident_log_report.py) pulls CloudWatch Logs over a requested time window, classifies events as `ERROR`, `WARN`, `INFO`, or `UNKNOWN`, and emits Markdown or JSON for post-incident review. [`.github/workflows/incident-log-report.yml`](.github/workflows/incident-log-report.yml) runs it manually through a least-privilege OIDC role created by Terraform.
+- **Deploy health checks:** [`scripts/health_check.py`](scripts/health_check.py) checks ALB liveness, `/health`, ECS service capacity, recent deployment events, stopped-task reasons, and recent CloudWatch error signals after Terraform apply.
+
 ## Architecture
 
 > ⚠️ This demo runs HTTP-only by default to avoid ACM/Route53 setup. Set `alb_certificate_arn` to enable TLS.
