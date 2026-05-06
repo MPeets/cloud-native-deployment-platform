@@ -65,6 +65,7 @@ test('health and readiness endpoints report process and database status', async 
   const healthyApp = createTestApp();
   const unhealthyApp = createTestApp({ ready: false });
 
+  await request(healthyApp).get('/').expect(200, 'API is running');
   await request(healthyApp).get('/health').expect(200, { status: 'ok' });
   await request(healthyApp).get('/ready').expect(200, { status: 'ready' });
   await request(unhealthyApp).get('/ready').expect(503, { status: 'unavailable' });
@@ -116,6 +117,15 @@ test('POST /deployments validates required fields', async () => {
     .post('/deployments')
     .send({ service: 'payments-api' })
     .expect(400, { error: 'service and version are required' });
+
+  await request(app)
+    .post('/deployments')
+    .send({ service: '   ', version: '1.4.2' })
+    .expect(400, { error: 'service and version are required' });
+
+  await request(app).post('/deployments').send(null).expect(400, {
+    error: 'service and version are required',
+  });
 });
 
 test('GET /deployments lists deployments with an optional status filter', async () => {
@@ -133,6 +143,14 @@ test('GET /deployments lists deployments with an optional status filter', async 
   assert.equal(filteredResponse.body[0].service, 'payments-api');
 });
 
+test('GET /deployments rejects invalid status filters', async () => {
+  const app = createTestApp();
+
+  await request(app)
+    .get('/deployments?status=rolled-back')
+    .expect(400, { error: 'invalid status value' });
+});
+
 test('GET /deployments/:id returns one deployment or 404', async () => {
   const app = createTestApp();
 
@@ -142,6 +160,18 @@ test('GET /deployments/:id returns one deployment or 404', async () => {
 
   assert.equal(response.body.service, 'payments-api');
   await request(app).get('/deployments/999').expect(404, { error: 'deployment not found' });
+});
+
+test('GET /deployments/:id validates positive integer ids', async () => {
+  const app = createTestApp();
+
+  await request(app).get('/deployments/abc').expect(400, {
+    error: 'id must be a positive integer',
+  });
+
+  await request(app).get('/deployments/0').expect(400, {
+    error: 'id must be a positive integer',
+  });
 });
 
 test('PATCH /deployments/:id/status updates valid status values', async () => {
@@ -171,6 +201,15 @@ test('PATCH /deployments/:id/status rejects invalid values and missing records',
     .expect(404, { error: 'deployment not found' });
 });
 
+test('PATCH /deployments/:id/status validates positive integer ids', async () => {
+  const app = createTestApp();
+
+  await request(app)
+    .patch('/deployments/abc/status')
+    .send({ status: 'succeeded' })
+    .expect(400, { error: 'id must be a positive integer' });
+});
+
 test('DELETE /deployments/:id removes a deployment', async () => {
   const app = createTestApp();
 
@@ -178,4 +217,32 @@ test('DELETE /deployments/:id removes a deployment', async () => {
 
   await request(app).delete('/deployments/1').expect(204);
   await request(app).get('/deployments/1').expect(404, { error: 'deployment not found' });
+});
+
+test('DELETE /deployments/:id validates positive integer ids', async () => {
+  const app = createTestApp();
+
+  await request(app).delete('/deployments/abc').expect(400, {
+    error: 'id must be a positive integer',
+  });
+});
+
+test('unexpected repository errors return a generic 500 response', async () => {
+  const originalConsoleError = console.error;
+  console.error = () => {};
+
+  const app = createApp({
+    deploymentsRepository: {
+      async list() {
+        throw new Error('database exploded');
+      },
+    },
+    isDatabaseReady: async () => {},
+  });
+
+  try {
+    await request(app).get('/deployments').expect(500, { error: 'internal server error' });
+  } finally {
+    console.error = originalConsoleError;
+  }
 });

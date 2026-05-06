@@ -2,7 +2,7 @@ const express = require('express');
 const { DEPLOYMENT_STATUSES } = require('./deploymentsRepository');
 
 function isPositiveInteger(value) {
-  return /^\d+$/.test(value);
+  return /^[1-9]\d*$/.test(value);
 }
 
 function createApp({ deploymentsRepository, isDatabaseReady }) {
