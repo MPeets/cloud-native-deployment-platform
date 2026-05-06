@@ -12,6 +12,15 @@ This project is more than an ECS deployment demo: it includes operator-focused a
 - **Incident log pull:** [`scripts/incident_log_report.py`](scripts/incident_log_report.py) pulls CloudWatch Logs over a requested time window, classifies events as `ERROR`, `WARN`, `INFO`, or `UNKNOWN`, and emits Markdown or JSON for post-incident review. [`.github/workflows/incident-log-report.yml`](.github/workflows/incident-log-report.yml) runs it manually through a least-privilege OIDC role created by Terraform.
 - **Deploy health checks:** [`scripts/health_check.py`](scripts/health_check.py) checks ALB liveness, `/health`, ECS service capacity, recent deployment events, stopped-task reasons, and recent CloudWatch error signals after Terraform apply.
 
+## Testing strategy
+
+The test suite focuses on behavior at service boundaries instead of only isolated implementation details. CI runs these checks before publishing Docker images or planning infrastructure changes.
+
+- **API contract tests:** 9 Node test cases in [`app/test/app.test.js`](app/test/app.test.js) use `supertest` against the Express app with a fake in-memory repository. They cover health/readiness, deployment creation, request trimming, validation failures, list/filter behavior, lookup/404 behavior, status updates, invalid transitions, and deletes.
+- **Worker lifecycle tests:** 2 Node test cases in [`worker/test/worker.test.js`](worker/test/worker.test.js) exercise the async deployment state machine directly. They assert that `pending` work is claimed as `running` before completion, and that deterministic random inputs produce both `succeeded` and `failed` outcomes.
+- **Infrastructure tests:** 5 Terraform module test files under [`infra/modules/`](infra/modules/) validate network, ALB, ECS cluster, ECS service, and RDS module behavior. The Terraform Plan workflow also runs `terraform fmt`, `terraform validate`, `tflint`, and `tfsec`.
+- **Operational smoke tests:** [`scripts-lint.yml`](.github/workflows/scripts-lint.yml) runs Pylint on Python operator scripts and replays migrations twice against a real PostgreSQL service to verify cold-start and idempotent behavior. Docker CI starts the built API image and runs [`scripts/health_check.py`](scripts/health_check.py) against `localhost:3000`.
+
 ## Architecture
 
 > ⚠️ This demo runs HTTP-only by default to avoid ACM/Route53 setup. Set `alb_certificate_arn` to enable TLS.
