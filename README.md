@@ -6,7 +6,9 @@ This file is the **map of the repo**. For depth, follow the links below.
 
 ## Architecture
 
-**Production (AWS):** Terraform-managed VPC, Internet-facing **ALB → ECS Fargate API** and a **private worker** service, **RDS PostgreSQL**, **VPC endpoints** (ECR, Logs, S3), **Secrets Manager** for `DATABASE_URL`, and **CloudWatch → SNS** for operational alarms. The ALB is **HTTP-only (port 80)** by default for a cheap demo; enable TLS by setting **`alb_certificate_arn`** (validated **ACM** certificate in the **same region** as the ALB—usually **`aws_acm_certificate`** with DNS validation, then a **listener on 443** and **HTTP→HTTPS redirect**, which this repo wires when that ARN is set).
+> ⚠️ This demo runs HTTP-only by default to avoid ACM/Route53 setup. Set `alb_certificate_arn` to enable TLS.
+
+**Production (AWS):** Terraform-managed VPC, Internet-facing **ALB → ECS Fargate API** and a **private worker** service, **RDS PostgreSQL**, **VPC endpoints** (ECR, Logs, S3), **Secrets Manager** for `DATABASE_URL`, and **CloudWatch → SNS** for operational alarms. When **`alb_certificate_arn`** is set to a validated **ACM** certificate in the ALB region, Terraform adds an **HTTPS :443** listener and **HTTP→HTTPS** redirect.
 
 ```mermaid
 flowchart TB

@@ -17,6 +17,8 @@ Keeping backend bootstrap resources out of the main root avoids Terraform trying
 
 ## Current status (what this stack does today)
 
+> ⚠️ This demo runs HTTP-only by default to avoid ACM/Route53 setup. Set `alb_certificate_arn` to enable TLS.
+
 - **Primary runtime:** **ECS on Fargate** is the default (`enable_ecs = true`). API and worker tasks run in **private subnets** without public IPs by default (`ecs_assign_public_ip = false`). Traffic enters through an **Application Load Balancer** in public subnets (**HTTP port 80** unless you set **`alb_certificate_arn`** for HTTPS + redirect) and only targets the API service.
 - **Database:** **PostgreSQL RDS** is enabled by default (`enable_rds = true`) using the small `db.t4g.micro` instance class, private subnets, encrypted storage, and a generated `DATABASE_URL` secret for ECS.
 - **Networking:** A dedicated **VPC** with two public and two **private** subnets (defaults in `variables.tf`), one **NAT gateway**, and **interface/gateway VPC endpoints** for ECR, CloudWatch Logs, and S3 when ECS is enabled.
