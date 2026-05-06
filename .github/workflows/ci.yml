@@ -2,7 +2,7 @@ name: CI - Build & Push Docker Images
 
 on:
   push:
-    branches: ["main"]
+    branches: ["**"]
     paths:
       - "app/**"
       - "worker/**"
@@ -77,6 +77,20 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/devops-worker:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Publish image summary
+        run: |
+          {
+            echo "### Docker images"
+            echo ""
+            echo "- Image SHA: \`${GITHUB_SHA}\`"
+            echo "- API: \`${DOCKERHUB_USERNAME}/devops-api:${GITHUB_SHA}\`"
+            echo "- Worker: \`${DOCKERHUB_USERNAME}/devops-worker:${GITHUB_SHA}\`"
+            echo ""
+            echo "Use this Image SHA as the Terraform \`image_sha\` input for rollback or preview deployments."
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
       - name: Trivy scan API image
         uses: aquasecurity/trivy-action@v0.36.0
