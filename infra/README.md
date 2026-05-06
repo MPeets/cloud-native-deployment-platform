@@ -27,7 +27,7 @@ Keeping backend bootstrap resources out of the main root avoids Terraform trying
 
 ## Local config (`terraform.tfvars`)
 
-This repo includes `terraform.tfvars.example` as a template. Create your local `terraform.tfvars` from it (do not commit it; it may hold account-specific image tags or other overrides you prefer not to track).
+This repo includes `terraform.tfvars.example` as a template. Create your local `terraform.tfvars` from it (do not commit it; it may hold account-specific overrides you prefer not to track).
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
@@ -45,7 +45,14 @@ Then edit `terraform.tfvars` and set:
 - `github_actions_oidc_repository` — defaults to this template’s repo slug; **change it when you fork** so OIDC `sub` claims match your `owner/name` on GitHub
 - **`alb_certificate_arn`** — optional; when set, the ALB adds **TLS on 443** and redirects **HTTP to HTTPS**. The ARN must be a **validated ACM certificate in the ALB’s AWS region**. Issuing one is typically **`aws_acm_certificate`** plus DNS validation (often Route 53); leave unset for **HTTP-only**.
 
-Required values without usable defaults (see [`terraform.tfvars.example`](./terraform.tfvars.example)):
+Image pins are intentionally not stored in tracked `tfvars` files. For local plans/applies, export immutable image refs in the shell:
+
+```bash
+export TF_VAR_docker_image="YOUR_DOCKERHUB_USER/devops-api:<git-sha>"
+export TF_VAR_worker_image="YOUR_DOCKERHUB_USER/devops-worker:<git-sha>"
+```
+
+Required values without usable defaults:
 
 - `docker_image` — API container image the ECS API task runs
 - `worker_image` — worker container image the ECS worker task runs; when omitted, Terraform derives the matching `devops-worker` tag from `docker_image`
