@@ -39,12 +39,16 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Resolve container images from latest Docker CI on main
+        id: resolve_images
         env:
           GITHUB_TOKEN: ${{ github.token }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: bash "${GITHUB_WORKSPACE}/scripts/ci_resolve_terraform_container_images.sh"
 
       - name: Require immutable container image refs
+        env:
+          TF_VAR_docker_image: ${{ steps.resolve_images.outputs.docker_image }}
+          TF_VAR_worker_image: ${{ steps.resolve_images.outputs.worker_image }}
         run: bash "${GITHUB_WORKSPACE}/scripts/ci_require_immutable_container_tags.sh"
 
       - name: Setup TFLint
@@ -122,6 +126,9 @@ jobs:
         run: terraform -chdir=bootstrap validate
 
       - name: Terraform Plan
+        env:
+          TF_VAR_docker_image: ${{ steps.resolve_images.outputs.docker_image }}
+          TF_VAR_worker_image: ${{ steps.resolve_images.outputs.worker_image }}
         run: |
           ENV_NAME="${TF_INFRA_ENVIRONMENT:-prod}"
           terraform plan \

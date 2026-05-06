@@ -22,9 +22,21 @@ if [[ -z "${SHA}" || "${SHA}" == "null" ]]; then
   exit 1
 fi
 
+IMG_API="${DOCKERHUB_USERNAME}/devops-api:${SHA}"
+IMG_WKR="${DOCKERHUB_USERNAME}/devops-worker:${SHA}"
+
 {
-  echo "TF_VAR_docker_image=${DOCKERHUB_USERNAME}/devops-api:${SHA}"
-  echo "TF_VAR_worker_image=${DOCKERHUB_USERNAME}/devops-worker:${SHA}"
+  echo "TF_VAR_docker_image=${IMG_API}"
+  echo "TF_VAR_worker_image=${IMG_WKR}"
 } >>"${GITHUB_ENV}"
+
+# Duplicate pins as step outputs so workflows can pass them via explicit `env:` on Terraform steps.
+# Relying on GITHUB_ENV alone can leave Terraform using tfvars placeholders in some Actions setups.
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    echo "docker_image=${IMG_API}"
+    echo "worker_image=${IMG_WKR}"
+  } >>"${GITHUB_OUTPUT}"
+fi
 
 echo "Terraform images pinned to Docker CI HEAD SHA ${SHA:0:7}"
