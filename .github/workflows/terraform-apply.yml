@@ -8,8 +8,16 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      infra_environment:
+        description: Terraform environment directory to apply (defaults to TF_INFRA_ENVIRONMENT or dev).
+        required: false
+        type: string
+      image_sha:
+        description: Optional full Git SHA for Docker image tags. Defaults to latest successful Docker CI on main.
+        required: false
+        type: string
       confirm_apply:
-        description: Type "apply" to create or update the infrastructure.
+        description: Select "apply" to create or update the infrastructure.
         required: true
         type: choice
         default: "no"
@@ -28,12 +36,12 @@ jobs:
   apply:
     if: |
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_apply == 'apply') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
 
     environment: production
     env:
-      TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT || 'dev' }}
+      TF_INFRA_ENVIRONMENT: ${{ inputs.infra_environment || vars.TF_INFRA_ENVIRONMENT || 'dev' }}
       TF_VAR_database_url_secret_arn: ${{ secrets.TF_DATABASE_URL_SECRET_ARN }}
       TF_VAR_aws_region: ${{ vars.TF_AWS_REGION }}
       TF_VAR_enable_ecs: ${{ vars.TF_ENABLE_ECS }}
@@ -48,11 +56,12 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Resolve container images from latest Docker CI on main
+      - name: Resolve container images
         id: resolve_images
         env:
           GITHUB_TOKEN: ${{ github.token }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_SHA: ${{ inputs.image_sha || '' }}
         run: bash "${GITHUB_WORKSPACE}/scripts/ci_resolve_terraform_container_images.sh"
 
       - name: Require immutable container image refs
