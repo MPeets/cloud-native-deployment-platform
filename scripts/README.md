@@ -34,7 +34,7 @@ The workflow [`.github/workflows/scripts-lint.yml`](../.github/workflows/scripts
 
 1. **ALB liveness** — HTTP **GET /** expects **200** (with retries/backoff).
 2. **ALB health** — **GET /health** expects **200** and JSON **`{"status":"ok"}`**.
-3. **ECS service** (unless **`--skip-aws`** or **`SKIP_AWS`**) — **`describe_services`** to confirm **running** task count matches **desired** count, with notes on pending tasks or active deployments.
+3. **ECS service** (unless **`--skip-aws`** or **`SKIP_AWS`**) — **`describe_services`** to confirm **running** task count matches **desired** count, with notes on pending tasks or active deployments. When that check fails it also surfaces recent **service events**, **deployment rollout state**, and **stopped-task** reasons (**`CannotPullContainerError`**, exit codes, etc.).
 4. **CloudWatch** (same AWS gate)— **`filter_log_events`** over a recent window and counts messages that look like errors (**ERROR**, **error**, **Exception**, **FATAL**).
 
 Prints a compact **pass/fail** report; exits **`0`** only if every enabled check passes. **`--demo`** prints sample output without calling AWS or HTTP.

@@ -173,6 +173,58 @@ def check_alb_health(
     )
 
 
+def _ecs_stopped_task_hints(ecs, *, cluster: str, service_name: str) -> list[str]:
+    """Pull brief reasons from the most recently stopped tasks (helps when logs are empty)."""
+    try:
+        listed = ecs.list_tasks(
+            cluster=cluster,
+            serviceName=service_name,
+            desiredStatus="STOPPED",
+            maxResults=3,
+        )
+    except ClientError:
+        return []
+    task_arns = listed.get("taskArns") or []
+    if not task_arns:
+        return []
+    try:
+        detail = ecs.describe_tasks(cluster=cluster, tasks=task_arns)
+    except ClientError:
+        return []
+    hints: list[str] = []
+    for task in detail.get("tasks") or []:
+        stop_reason = task.get("stoppedReason") or ""
+        if stop_reason:
+            hints.append(f"task: {stop_reason[:450]}")
+        for ctn in task.get("containers") or []:
+            cname = ctn.get("name", "?")
+            c_reason = ctn.get("reason")
+            exit_code = ctn.get("exitCode")
+            if c_reason or exit_code is not None:
+                hints.append(f"{cname}: reason={c_reason!r} exit={exit_code!r}")
+            if len(hints) >= 5:
+                return hints
+    return hints[:5]
+
+
+def _ecs_rollout_diag(svc: dict) -> list[str]:
+    lines: list[str] = []
+    deployments = svc.get("deployments") or []
+    if deployments:
+        d0 = deployments[0]
+        rs = d0.get("rolloutState")
+        if rs and rs != "COMPLETED":
+            lines.append(f"deployment rolloutState={rs}")
+        rsr = d0.get("rolloutStateReason")
+        if rsr:
+            lines.append(f"deployment rolloutStateReason={rsr}")
+    for evt in (svc.get("events") or [])[:5]:
+        msg = (evt.get("message") or "").strip().replace("\n", " ")
+        if msg:
+            lines.append(f"service event: {msg[:380]}")
+    return lines[:8]
+
+
 def check_ecs_service(
     *,
     cluster: str,
@@ -210,7 +262,23 @@ def check_ecs_service(
             duration_ms=None,
         )
 
-    return _ecs_service_counts_result(services[0])
+    base = _ecs_service_counts_result(services[0])
+    if base.passed:
+        return base
+
+    svc = services[0]
+    extras: list[str] = []
+    extras.extend(_ecs_rollout_diag(svc))
+    extras.extend(_ecs_stopped_task_hints(ecs, cluster=cluster, service_name=service_name))
+    if not extras:
+        return base
+
+    return CheckResult(
+        name="ECS service",
+        passed=False,
+        message=f"{base.message}\n  " + "\n  ".join(extras),
+        duration_ms=None,
+    )
 
 
 def _ecs_service_counts_result(svc: dict) -> CheckResult:

@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
-# Fails CI when container image vars use :latest (mutable tag / ECS rollout foot-gun).
+# Ensures Terraform gets real container pins in CI (tfvars use placeholder tags that ECS cannot pull).
+# Also rejects :latest and tfvars-placeholder* substrings.
 set -euo pipefail
 
-_immutable_check() {
+_ci_require_pins() {
+  local d="${TF_VAR_docker_image:-}"
+  local w="${TF_VAR_worker_image:-}"
+  if [[ -z "$d" || -z "$w" ]]; then
+    echo "::error title=Missing image pins::TF_VAR_docker_image and TF_VAR_worker_image must be set in GitHub Actions before Terraform (run scripts/ci_resolve_terraform_container_images.sh, or set both explicitly)." >&2
+    exit 1
+  fi
+}
+
+_immutable_latest_check() {
   local name=$1
   local val=$2
   [[ -n "$val" ]] || return 0
@@ -14,5 +24,23 @@ _immutable_check() {
   esac
 }
 
-_immutable_check TF_VAR_docker_image "${TF_VAR_docker_image:-}"
-_immutable_check TF_VAR_worker_image "${TF_VAR_worker_image:-}"
+_placeholder_check() {
+  local name=$1
+  local val=$2
+  [[ -n "$val" ]] || return 0
+  case "$val" in
+  *tfvars-placeholder*)
+    echo "::error title=Invalid image tag::${name} still uses a tfvars placeholder; Terraform would deploy an image that does not exist on the registry. Run ci_resolve_terraform_container_images.sh or set a real tag." >&2
+    exit 1
+    ;;
+  esac
+}
+
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  _ci_require_pins
+fi
+
+_immutable_latest_check TF_VAR_docker_image "${TF_VAR_docker_image:-}"
+_immutable_latest_check TF_VAR_worker_image "${TF_VAR_worker_image:-}"
+_placeholder_check TF_VAR_docker_image "${TF_VAR_docker_image:-}"
+_placeholder_check TF_VAR_worker_image "${TF_VAR_worker_image:-}"
