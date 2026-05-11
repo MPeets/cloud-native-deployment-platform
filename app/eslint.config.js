@@ -12,6 +12,7 @@ module.exports = [
         module: 'readonly',
         require: 'readonly',
         process: 'readonly',
+        URLSearchParams: 'readonly',
       },
     },
     rules: {
