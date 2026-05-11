@@ -9,6 +9,7 @@ on:
       - "migrate/**"
       - "migrations/**"
       - "scripts/run_migrations.py"
+      - "infra/**"
   workflow_dispatch:
 
 concurrency:

@@ -97,7 +97,7 @@ jobs:
             -var-file="envs/${ENV_NAME}/terraform.tfvars" \
             -out=tfplan
 
-      - name: Terraform Apply
+      - name: Terraform Apply (AWS changes)
         env:
           TF_VAR_docker_image: ${{ steps.resolve_images.outputs.docker_image }}
           TF_VAR_worker_image: ${{ steps.resolve_images.outputs.worker_image }}
@@ -118,14 +118,14 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: pip install -r scripts/requirements.txt
 
-      - name: Post-deploy health check
+      - name: Post-deploy health check (ALB / ECS — may need extra time after new task rollouts)
         working-directory: ${{ github.workspace }}
         env:
           AWS_REGION: ${{ vars.TF_AWS_REGION }}
           TF_INFRA_ENVIRONMENT: ${{ vars.TF_INFRA_ENVIRONMENT || 'dev' }}
         run: |
-          max_attempts=12
-          sleep_seconds=30
+          max_attempts=20
+          sleep_seconds=35
           for attempt in $(seq 1 "$max_attempts"); do
             echo "Health check attempt ${attempt}/${max_attempts}..."
             if python scripts/health_check.py; then

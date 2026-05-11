@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Sets TF_VAR_docker_image / TF_VAR_worker_image from an explicit deploy SHA, or from
-# the HEAD SHA of the latest successful "CI - Build & Push Docker Images" workflow
+# Sets TF_VAR_docker_image / TF_VAR_worker_image / TF_VAR_migrate_image from an explicit
+# deploy SHA, or from the HEAD SHA of the latest successful "CI - Build & Push Docker Images"
 # run on main (.github/workflows/ci.yml) when no explicit SHA is provided.
 set -euo pipefail
 
@@ -20,7 +20,7 @@ resolve_latest_main_sha() {
 
   sha="$(echo "${resp}" | jq -r '.workflow_runs[0].head_sha // empty')"
   if [[ -z "${sha}" || "${sha}" == "null" ]]; then
-    echo "::error::No successful ci.yml run on main; push a change under app/ or worker/ to main first." >&2
+    echo "::error::No successful ci.yml run on main yet. Push any change under app/, worker/, migrate/, migrations/, scripts/run_migrations.py, or infra/ on main first, wait for \"CI - Build & Push Docker Images\" to go green (all three images including devops-migrate)." >&2
     exit 1
   fi
 
