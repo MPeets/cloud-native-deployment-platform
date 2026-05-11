@@ -147,6 +147,7 @@ Typical variables:
 - `TF_INFRA_ENVIRONMENT`: `dev` or `prod`; selects `infra/envs/<name>/` for Terraform `-backend-config` and `-var-file` in CI. If the repository variable is missing or empty, workflows coerce it to `dev` (`vars.TF_INFRA_ENVIRONMENT || 'dev'`); shell steps also use `dev` via `${TF_INFRA_ENVIRONMENT:-dev}`.
 - `TF_AWS_REGION`: e.g. `eu-north-1`
 - Container images for Terraform in CI: plan/apply/drift/destroy resolve `TF_VAR_docker_image` and `TF_VAR_worker_image` automatically from the latest successful [`ci.yml`](.github/workflows/ci.yml) run on `main`, using the same Git SHA tagging as deploy and `DOCKERHUB_USERNAME`. You do not need `TF_DOCKER_IMAGE` or `TF_WORKER_IMAGE` variables.
+- Docker image rollback is manual and SHA-based: run `Terraform Apply` from `main` with `confirm_apply=apply`, the target `infra_environment`, and `image_sha` set to the last known good commit SHA. See [`infra/README.md`](infra/README.md#github-actions-deploy-image-selection) for the detailed flow.
 - `TF_ENABLE_ECS`: `true` for Fargate
 
 Secrets:
