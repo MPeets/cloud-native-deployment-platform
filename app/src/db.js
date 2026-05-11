@@ -1,10 +1,11 @@
 const { Pool } = require('pg');
+const { poolOptions } = require('./rdsSsl');
 
 const connectionString =
   process.env.DATABASE_URL ||
   'postgres://postgres:postgres@db:5432/cloud-native-deployment-platform';
 
-const pool = new Pool({ connectionString });
+const pool = new Pool(poolOptions(connectionString));
 
 async function checkConnection() {
   await pool.query('SELECT 1');

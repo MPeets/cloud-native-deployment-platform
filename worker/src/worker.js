@@ -157,7 +157,8 @@ function createDeploymentWorker({
 
 async function main() {
   const { Pool } = require('pg');
-  const pool = new Pool({ connectionString: DEFAULT_DATABASE_URL });
+  const { poolOptions } = require('./rdsSsl');
+  const pool = new Pool(poolOptions(DEFAULT_DATABASE_URL));
   const repository = createWorkerRepository(pool);
   const worker = createDeploymentWorker({ repository, logger: defaultLogger });
 
