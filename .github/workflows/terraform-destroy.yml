@@ -32,6 +32,8 @@ jobs:
       TF_VAR_database_url_secret_arn: ${{ secrets.TF_DATABASE_URL_SECRET_ARN }}
       TF_VAR_aws_region: ${{ vars.TF_AWS_REGION }}
       TF_VAR_enable_ecs: ${{ vars.TF_ENABLE_ECS }}
+      TF_VAR_otel_exporter_otlp_endpoint: ${{ vars.TF_OTEL_EXPORTER_OTLP_ENDPOINT }}
+      TF_VAR_otel_exporter_otlp_headers_secret_arn: ${{ vars.TF_OTEL_EXPORTER_OTLP_HEADERS_SECRET_ARN }}
 
     defaults:
       run:

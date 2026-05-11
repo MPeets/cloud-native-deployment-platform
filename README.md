@@ -149,6 +149,7 @@ Typical variables:
 - Container images for Terraform in CI: plan/apply/drift/destroy resolve `TF_VAR_docker_image`, `TF_VAR_worker_image`, and `TF_VAR_migrate_image` automatically from the latest successful [`ci.yml`](.github/workflows/ci.yml) run on `main`, using the same Git SHA tagging as deploy and `DOCKERHUB_USERNAME`. You do not need `TF_DOCKER_IMAGE` or `TF_WORKER_IMAGE` variables.
 - Docker image rollback is manual and SHA-based: run `Terraform Apply` from `main` with `confirm_apply=apply`, the target `infra_environment`, and `image_sha` set to the last known good commit SHA. See [`infra/README.md`](infra/README.md#github-actions-deploy-image-selection) for the detailed flow.
 - `TF_ENABLE_ECS`: `true` for Fargate
+- Optional Grafana / OpenTelemetry (API traces only): `TF_OTEL_EXPORTER_OTLP_ENDPOINT` (Grafana OTLP gateway URL) and `TF_OTEL_EXPORTER_OTLP_HEADERS_SECRET_ARN` (AWS Secrets Manager ARN whose plaintext is the `OTEL_EXPORTER_OTLP_HEADERS` line from Grafana). Workflows map these to Terraform `otel_exporter_otlp_*` variables. Repository variable names are **`TF_OTEL_…`**, not `TF_VAR_OTEL_…`—Terraform’s `TF_VAR_` prefix is only for shell environment variables and must use **lowercase** Terraform input names (for example `TF_VAR_otel_exporter_otlp_endpoint`).
 
 Secrets:
 
