@@ -6,6 +6,7 @@ locals {
       protocol      = pm.protocol != null ? pm.protocol : "tcp"
     }
   ]
+  container_secrets = concat(var.database_url_secrets, var.additional_secrets)
 }
 
 resource "aws_ecs_task_definition" "this" {
@@ -32,7 +33,8 @@ resource "aws_ecs_task_definition" "this" {
         }
       },
       length(local.port_mappings_normalized) > 0 ? { portMappings = local.port_mappings_normalized } : {},
-      length(var.database_url_secrets) > 0 ? { secrets = var.database_url_secrets } : {},
+      length(local.container_secrets) > 0 ? { secrets = local.container_secrets } : {},
+      length(var.environment) > 0 ? { environment = var.environment } : {},
     )
   ])
 }

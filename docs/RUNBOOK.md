@@ -17,7 +17,8 @@ This document covers **how to verify the stack**, **what alerts mean**, **where 
 | **ALB** | Public HTTP **:80** (and **HTTPS :443** when `alb_certificate_arn` is set in Terraform) → API target group only |
 | **ECS Fargate** | API service (behind ALB) + private **worker** service |
 | **RDS PostgreSQL** | Private DB; tasks read **`DATABASE_URL`** from **Secrets Manager** |
-| **CloudWatch** | ECS task logs, metrics, **alarms** |
+| **CloudWatch** | ECS task logs (**JSON** from the app and worker), platform metrics, **alarms** |
+| **Metrics (API)** | Prometheus text at **`GET /metrics`** (request total, latency histogram, in-flight gauge) |
 | **SNS** | Alarm destination (`ops_alerts_sns_topic_arn` from Terraform) |
 | **Terraform** | `infra/` with per-env state under `infra/envs/<env>/` |
 
@@ -44,6 +45,52 @@ Optional: **`AWS_INCIDENT_LOGS_READER_ROLE_ARN`** matches the **`github_actions_
 
 ---
 
+## Observability
+
+### Structured logs → CloudWatch
+
+The **API** and **worker** write **Pino JSON** to stdout. ECS forwards those lines to **CloudWatch Logs** (log group naming follows the ECS cluster and service from Terraform).
+
+- Tune verbosity with **`LOG_LEVEL`** on the task (default **`info`**).
+- Typical fields include **`level`**, **`time`**, **`msg`**, and on errors **`err`** (message and stack). Worker entries include **`service":"deployment-worker"`** so you can split API vs worker in **Logs Insights**.
+
+Example **Logs Insights** query (substitute the API log group name from the ECS console or `health_check.py` docs):
+
+```sql
+fields @timestamp, level, msg, err.message
+| filter level = 50 or msg = "unhandled error"
+| sort @timestamp desc
+| limit 50
+```
+
+### Prometheus metrics → `GET /metrics`
+
+Only the **API** task exposes metrics; the worker has no HTTP listener. The process serves **Prometheus text exposition** on the **same port as the REST API** (container port **3000** on the target group), path **`/metrics`**.
+
+**Quick check** (use Terraform output **`alb_dns_name`** as the host; switch to **`https://`** when **`alb_certificate_arn`** is set):
+
+```bash
+curl -sS "http://ALB_DNS/metrics" | head -n 40
+```
+
+Generate a little traffic (`GET /health`, `GET /deployments`, etc.), then run **`curl` again**. Counters and histogram buckets should move, for example:
+
+- **`http_requests_total`** — labels **`method`**, **`route`**, **`status_code`**
+- **`http_request_duration_seconds`** — end-to-end request latency
+- **`http_requests_in_flight`** — concurrent requests (may show brief non‑zero values under load)
+
+**Production scraping:** Use any Prometheus-compatible scraper against **`http(s)://<alb>/metrics`**, or add an internal collector later if you do not want application metrics on the public listener. Until you scrape, **AWS-native** visibility is still **ALB** and **ECS** metrics in CloudWatch; **`/metrics`** is extra **application RED-style** detail.
+
+**Evidence for audits or tickets:** After load, keep a **screenshot** of either (1) terminal output from **`curl …/metrics`** showing those three metric families with non‑default values, or (2) a **Grafana Explore** / **Prometheus** panel where **`rate(http_requests_total[5m])`** or histogram quantiles react to requests. Store the image next to this runbook in your wiki or attach it to the incident.
+
+### Traces (optional, Grafana Cloud / OTLP)
+
+When Terraform sets **`otel_exporter_otlp_endpoint`** and **`otel_exporter_otlp_headers_secret_arn`**, the API ships **OpenTelemetry** traces to your OTLP gateway (e.g. Grafana Cloud). **`OTEL_EXPORTER_OTLP_HEADERS`** is read from **Secrets Manager** by the ECS **task execution** role; remaining OTLP-related variables are non-secret task env vars from Terraform (see [`infra/README.md`](../infra/README.md)).
+
+**Sanity check:** In Grafana (**Explore** / Tempo or **Application Observability**), find the service name you set with **`OTEL_SERVICE_NAME`** (default **`devops-api`**) and confirm traces after requests through the ALB. If the stream is empty: validate the secret plaintext matches Grafana’s header line, **`GetSecretValue`** on the execution role covers that secret ARN, and **NAT** allows **HTTPS** from private subnets to the OTLP host.
+
+---
+
 ## Alerting (CloudWatch → SNS)
 
 Alarms exist when ECS and/or RDS are enabled (see `infra/cloudwatch_alarm_*.tf` for tunable thresholds).
@@ -67,7 +114,9 @@ Alarms exist when ECS and/or RDS are enabled (see `infra/cloudwatch_alarm_*.tf` 
 | **RDS CPU** | Query load vs instance class (`db.t4g.micro` in sample); correlate with traffic and slow queries if you enable logging |
 | **502/503 at ALB** | Unhealthy targets, zero running tasks, security group or listener misconfiguration |
 
-**Logs:** ECS services log to CloudWatch (log group pattern documented with `health_check.py` / workflows). For a bounded window export suitable for notes or issues, use **`scripts/incident_log_report.py`** or **`.github/workflows/incident-log-report.yml`**.
+**Logs:** ECS services log to CloudWatch (log group pattern documented with `health_check.py` / workflows). For a bounded window export suitable for notes or issues, use **`scripts/incident_log_report.py`** or **`.github/workflows/incident-log-report.yml`**. See **[Observability](#observability)** for JSON log fields and **Logs Insights** examples.
+
+**Traces (optional):** Configure Terraform OTLP variables and Grafana as described under **[Observability](#observability)**; if spans are missing, verify the OTLP **Secrets Manager** value, **IAM**, and **NAT egress**.
 
 ---
 

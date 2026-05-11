@@ -89,6 +89,24 @@ variable "database_url_secrets" {
   default = []
 }
 
+variable "additional_secrets" {
+  type = list(object({
+    name      = string
+    valueFrom = string
+  }))
+  default     = []
+  description = "Extra ECS container secrets (e.g. OpenTelemetry OTLP headers from Secrets Manager)."
+}
+
+variable "environment" {
+  type = list(object({
+    name  = string
+    value = string
+  }))
+  default     = []
+  description = "Plain environment variables for the container (not sourced from Secrets Manager)."
+}
+
 variable "load_balancer" {
   type = object({
     target_group_arn                  = string

@@ -1,5 +1,7 @@
 const express = require('express');
 const { DEPLOYMENT_STATUSES } = require('./deploymentsRepository');
+const logger = require('./logger');
+const { createHttpMetricsMiddleware, metricsHandler } = require('./metrics');
 
 function isPositiveInteger(value) {
   return /^[1-9]\d*$/.test(value);
@@ -9,6 +11,9 @@ function createApp({ deploymentsRepository, isDatabaseReady }) {
   const app = express();
 
   app.use(express.json());
+  app.use(createHttpMetricsMiddleware());
+
+  app.get('/metrics', metricsHandler);
 
   app.get('/', (_req, res) => {
     res.send('API is running');
@@ -133,7 +138,7 @@ function createApp({ deploymentsRepository, isDatabaseReady }) {
   });
 
   app.use((error, _req, res, _next) => {
-    console.error(error);
+    logger.error({ err: error }, 'unhandled error');
     res.status(500).json({ error: 'internal server error' });
   });
 

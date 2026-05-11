@@ -13,3 +13,9 @@ private_subnet_cidrs      = ["10.0.101.0/24", "10.0.102.0/24"]
 
 # Optional TLS: validated ACM cert ARN (same region as alb). Unset = HTTP-only demo (port 80).
 # alb_certificate_arn     = "arn:aws:acm:eu-north-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# Optional Grafana Cloud OTLP for the API ECS task. Store the full OTLP headers line as a
+# Secrets Manager plaintext secret (same value as OTEL_EXPORTER_OTLP_HEADERS from Grafana).
+# otel_exporter_otlp_endpoint           = "https://otlp-gateway-prod-eu-north-0.grafana.net/otlp"
+# otel_exporter_otlp_headers_secret_arn = "arn:aws:secretsmanager:eu-north-1:123456789012:secret:devops-otel-xxxxx"
+# otel_resource_attributes              = "deployment.environment=dev"

@@ -10,6 +10,35 @@ locals {
     }
   ] : []
   worker_image = var.worker_image != null && var.worker_image != "" ? var.worker_image : replace(var.docker_image, "/devops-api:", "/devops-worker:")
+
+  otel_headers_secret_arn = var.otel_exporter_otlp_headers_secret_arn != null ? trimspace(var.otel_exporter_otlp_headers_secret_arn) : ""
+  otel_otlp_endpoint      = var.otel_exporter_otlp_endpoint != null ? trimspace(var.otel_exporter_otlp_endpoint) : ""
+  otel_api_enabled        = local.otel_headers_secret_arn != "" && local.otel_otlp_endpoint != ""
+
+  api_otel_secrets = local.otel_api_enabled ? [
+    {
+      name      = "OTEL_EXPORTER_OTLP_HEADERS"
+      valueFrom = local.otel_headers_secret_arn
+    }
+  ] : []
+
+  api_otel_environment = local.otel_api_enabled ? concat(
+    [
+      { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = local.otel_otlp_endpoint },
+      { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = var.otel_exporter_otlp_protocol },
+      { name = "OTEL_SERVICE_NAME", value = var.otel_service_name },
+      { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
+      { name = "OTEL_NODE_RESOURCE_DETECTORS", value = "env,host,os" },
+    ],
+    var.otel_resource_attributes != null && trimspace(var.otel_resource_attributes) != "" ? [
+      { name = "OTEL_RESOURCE_ATTRIBUTES", value = trimspace(var.otel_resource_attributes) },
+    ] : [],
+  ) : []
+
+  ecs_task_execution_secret_arns = compact(concat(
+    local.use_database_url_secret ? [local.database_url_secret_arn] : [],
+    local.otel_api_enabled ? [local.otel_headers_secret_arn] : [],
+  ))
 }
 
 module "alb" {
@@ -42,10 +71,9 @@ module "ecs_cluster" {
 }
 
 resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
-  # Count must not depend on module.rds outputs: managed secret ARN is unknown until apply.
-  count = (var.enable_ecs && local.use_database_url_secret) ? 1 : 0
+  count = var.enable_ecs && (local.use_database_url_secret || local.otel_api_enabled) ? 1 : 0
 
-  name = "${local.name_prefix}-read-database-url-secret"
+  name = "${local.name_prefix}-read-ecs-execution-secrets"
   role = module.ecs_cluster[0].ecs_task_execution_role_id
 
   policy = jsonencode({
@@ -54,7 +82,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
       {
         Effect   = "Allow"
         Action   = "secretsmanager:GetSecretValue"
-        Resource = local.database_url_secret_arn
+        Resource = local.ecs_task_execution_secret_arns
       }
     ]
   })
@@ -83,6 +111,8 @@ module "ecs_service_api" {
   assign_public_ip     = var.ecs_assign_public_ip
   desired_count        = var.ecs_desired_count
   database_url_secrets = local.database_url_secrets
+  additional_secrets   = local.api_otel_secrets
+  environment          = local.api_otel_environment
 
   port_mappings = [
     {

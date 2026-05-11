@@ -3,7 +3,7 @@ const test = require('node:test');
 const { processPendingDeployments, waitForRepository } = require('../src/worker');
 
 const logger = {
-  log() {},
+  info() {},
   error() {},
 };
 
@@ -137,8 +137,8 @@ test('waitForRepository retries initialization until the repository is ready', a
       retryDelays.push(ms);
     },
     logger: {
-      error(message, error) {
-        loggedErrors.push({ message, error });
+      error(obj, message) {
+        loggedErrors.push({ obj, message });
       },
     },
   });
@@ -146,5 +146,6 @@ test('waitForRepository retries initialization until the repository is ready', a
   assert.equal(attempts, 3);
   assert.deepEqual(retryDelays, [25, 25]);
   assert.equal(loggedErrors.length, 2);
-  assert.equal(loggedErrors[0].message, 'Database unavailable, retrying worker initialization');
+  assert.equal(loggedErrors[0].message, 'database unavailable, retrying worker initialization');
+  assert.match(loggedErrors[0].obj.err.message, /database unavailable/);
 });

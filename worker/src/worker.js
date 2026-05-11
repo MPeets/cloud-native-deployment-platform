@@ -5,6 +5,8 @@ const DEFAULT_POLL_INTERVAL_MS = Number(process.env.WORKER_POLL_INTERVAL_MS || 5
 const DEFAULT_PROCESSING_MS = Number(process.env.WORKER_PROCESSING_MS || 3000);
 const DEFAULT_FAILURE_RATE = Number(process.env.WORKER_FAILURE_RATE || 0.1);
 
+const defaultLogger = require('./logger');
+
 function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -69,29 +71,29 @@ async function processPendingDeployments({
   failureRate = DEFAULT_FAILURE_RATE,
   random = Math.random,
   sleepFn = sleep,
-  logger = console,
+  logger = defaultLogger,
 } = {}) {
   const deployments = await repository.claimPending();
 
   for (const deployment of deployments) {
-    logger.log(`Deployment ${deployment.id} is running`);
+    logger.info({ deploymentId: deployment.id }, 'deployment processing started');
     await sleepFn(processingMs);
 
     const nextStatus = random() < failureRate ? 'failed' : 'succeeded';
     await repository.updateStatus(deployment.id, nextStatus);
-    logger.log(`Deployment ${deployment.id} ${nextStatus}`);
+    logger.info({ deploymentId: deployment.id, status: nextStatus }, 'deployment processing finished');
   }
 
   return deployments;
 }
 
-async function waitForRepository(repository, { retryMs = 1000, sleepFn = sleep, logger = console } = {}) {
+async function waitForRepository(repository, { retryMs = 1000, sleepFn = sleep, logger = defaultLogger } = {}) {
   while (true) {
     try {
       await repository.initialize();
       return;
     } catch (error) {
-      logger.error('Database unavailable, retrying worker initialization', error);
+      logger.error({ err: error }, 'database unavailable, retrying worker initialization');
       await sleepFn(retryMs);
     }
   }
@@ -104,7 +106,7 @@ function createDeploymentWorker({
   failureRate = DEFAULT_FAILURE_RATE,
   random = Math.random,
   sleepFn = sleep,
-  logger = console,
+  logger = defaultLogger,
 } = {}) {
   let running = false;
   let loopPromise = null;
@@ -125,7 +127,7 @@ function createDeploymentWorker({
       try {
         await processOnce();
       } catch (error) {
-        logger.error('Worker failed to process deployments', error);
+        logger.error({ err: error }, 'worker failed to process deployments');
       }
 
       if (running) {
@@ -157,9 +159,9 @@ async function main() {
   const { Pool } = require('pg');
   const pool = new Pool({ connectionString: DEFAULT_DATABASE_URL });
   const repository = createWorkerRepository(pool);
-  const worker = createDeploymentWorker({ repository });
+  const worker = createDeploymentWorker({ repository, logger: defaultLogger });
 
-  await waitForRepository(repository);
+  await waitForRepository(repository, { logger: defaultLogger });
   worker.start();
 
   process.on('SIGINT', async () => {
@@ -177,7 +179,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch((error) => {
-    console.error('Worker failed to start', error);
+    defaultLogger.error({ err: error }, 'worker failed to start');
     process.exit(1);
   });
 }
