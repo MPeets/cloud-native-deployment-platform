@@ -8,7 +8,13 @@ Install once when running them locally:
 pip install -r scripts/requirements.txt
 ```
 
-The workflow [`.github/workflows/scripts-lint.yml`](../.github/workflows/scripts-lint.yml) runs **Pylint** on this directory and exercises **`run_migrations.py`** against a CI database service.
+The workflow [`.github/workflows/scripts-lint.yml`](../.github/workflows/scripts-lint.yml) runs **unit tests** for `test_*.py`, runs **Pylint** on this directory, and exercises **`run_migrations.py`** against a CI database service.
+
+Run the script unit tests locally from the repo root:
+
+```bash
+python -m unittest discover -s scripts -p "test_*.py"
+```
 
 ---
 

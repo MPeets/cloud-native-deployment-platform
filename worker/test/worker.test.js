@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { processPendingDeployments } = require('../src/worker');
+const { processPendingDeployments, waitForRepository } = require('../src/worker');
 
 const logger = {
   log() {},
@@ -64,4 +64,87 @@ test('worker can mark a processed deployment as failed', async () => {
   });
 
   assert.equal(status, 'failed');
+});
+
+test('worker does not sleep or update when no deployments are pending', async () => {
+  let updateCalls = 0;
+  let sleepCalls = 0;
+
+  const repository = {
+    async claimPending() {
+      return [];
+    },
+    async updateStatus() {
+      updateCalls += 1;
+    },
+  };
+
+  const processed = await processPendingDeployments({
+    repository,
+    sleepFn: async () => {
+      sleepCalls += 1;
+    },
+    logger,
+  });
+
+  assert.deepEqual(processed, []);
+  assert.equal(updateCalls, 0);
+  assert.equal(sleepCalls, 0);
+});
+
+test('worker passes the configured processing delay to sleep', async () => {
+  const sleepDurations = [];
+
+  const repository = {
+    async claimPending() {
+      return [{ id: 1, status: 'running' }];
+    },
+    async updateStatus() {
+      return { id: 1, status: 'succeeded' };
+    },
+  };
+
+  await processPendingDeployments({
+    repository,
+    processingMs: 1234,
+    sleepFn: async (ms) => {
+      sleepDurations.push(ms);
+    },
+    random: () => 0.5,
+    logger,
+  });
+
+  assert.deepEqual(sleepDurations, [1234]);
+});
+
+test('waitForRepository retries initialization until the repository is ready', async () => {
+  let attempts = 0;
+  const retryDelays = [];
+  const loggedErrors = [];
+
+  const repository = {
+    async initialize() {
+      attempts += 1;
+      if (attempts < 3) {
+        throw new Error('database unavailable');
+      }
+    },
+  };
+
+  await waitForRepository(repository, {
+    retryMs: 25,
+    sleepFn: async (ms) => {
+      retryDelays.push(ms);
+    },
+    logger: {
+      error(message, error) {
+        loggedErrors.push({ message, error });
+      },
+    },
+  });
+
+  assert.equal(attempts, 3);
+  assert.deepEqual(retryDelays, [25, 25]);
+  assert.equal(loggedErrors.length, 2);
+  assert.equal(loggedErrors[0].message, 'Database unavailable, retrying worker initialization');
 });
