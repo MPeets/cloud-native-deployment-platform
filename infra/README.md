@@ -79,6 +79,18 @@ Rollback production by running `Terraform Apply` on `main`, setting `confirm_app
 
 Manual `Terraform Plan` runs do not chain into automatic apply. Automatic apply remains limited to successful push-triggered plans on `main`.
 
+## Terraform workflow boundaries
+
+Terraform uses three GitHub Actions workflows instead of one parameterized workflow:
+
+- `Terraform Plan`: runs for pull requests, infrastructure pushes to `main`, and manual checks. It validates, tests, scans, and renders a plan without mutating infrastructure.
+- `Terraform Apply`: runs only from `main`, either after a successful push-triggered plan or through a manual dispatch that requires `confirm_apply = apply`. The job uses the GitHub Actions environment named `production`, so GitHub environment protection rules can pause the deployment before credentials are used.
+- `Terraform Destroy`: is manual-only, requires `confirm_destroy = destroy`, and also uses the GitHub Actions environment named `production`. Keeping teardown separate makes the destructive path visible and harder to confuse with routine apply.
+
+The GitHub Actions environment name is not the same thing as the Terraform environment. `production` is the GitHub approval/protection wrapper on the job. The actual Terraform target comes from `infra_environment`, then `TF_INFRA_ENVIRONMENT`, and finally defaults to `dev`; that value selects files under `infra/envs/<name>/`, such as `envs/dev` or `envs/prod`.
+
+This repo intentionally does not use Terraform Cloud or Atlantis. Both are valid choices when a team wants remote runs, policy checks, richer approvals, or PR-comment driven workflows, but they add another service and onboarding path that would distract from the GitHub Actions and AWS OIDC baseline. A single workflow with `workflow_dispatch` inputs would reduce duplication, but it would combine planning, mutation, and destruction behind the same action entry point. Separate workflows make permissions, approvals, audit trails, and operator intent easier to explain.
+
 ## First-Time Bootstrap (No Existing Backend Bucket)
 
 1. Create the remote state bucket from the bootstrap root:
