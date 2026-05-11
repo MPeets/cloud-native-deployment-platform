@@ -9,6 +9,7 @@
     "test": "node --test"
   },
   "dependencies": {
+    "pino": "^9.14.0",
     "pg": "^8.20.0"
   }
 }
