@@ -69,6 +69,8 @@ Alarms exist when ECS and/or RDS are enabled (see `infra/cloudwatch_alarm_*.tf` 
 
 **Logs:** ECS services log to CloudWatch (log group pattern documented with `health_check.py` / workflows). For a bounded window export suitable for notes or issues, use **`scripts/incident_log_report.py`** or **`.github/workflows/incident-log-report.yml`**.
 
+**OpenTelemetry (optional):** If the API task is configured with OTLP variables, traces go to your gateway (e.g. Grafana Cloud). **`OTEL_EXPORTER_OTLP_HEADERS`** is loaded from **Secrets Manager** by the ECS execution role; other OTLP settings are plain task environment variables from Terraform. If spans never appear, verify the secret string matches Grafana’s header line, task IAM, and **NAT egress** from private subnets to the OTLP URL.
+
 ---
 
 ## Deployments

@@ -26,6 +26,36 @@ variable "database_url_secret_arn" {
   description = "Optional AWS Secrets Manager secret ARN containing the DATABASE_URL value for ECS tasks. When unset and enable_rds is true, Terraform creates one from the managed RDS instance."
 }
 
+variable "otel_exporter_otlp_endpoint" {
+  type        = string
+  default     = null
+  description = "Grafana/OTLP gateway URL for traces. When set together with otel_exporter_otlp_headers_secret_arn, the API ECS task exports OpenTelemetry to this endpoint."
+}
+
+variable "otel_exporter_otlp_headers_secret_arn" {
+  type        = string
+  default     = null
+  description = "Secrets Manager secret ARN whose plaintext string is the full OTEL_EXPORTER_OTLP_HEADERS value (e.g. Authorization=Basic%20... from Grafana Cloud)."
+}
+
+variable "otel_exporter_otlp_protocol" {
+  type        = string
+  default     = "http/protobuf"
+  description = "Sets OTEL_EXPORTER_OTLP_PROTOCOL on the API task."
+}
+
+variable "otel_service_name" {
+  type        = string
+  default     = "devops-api"
+  description = "Sets OTEL_SERVICE_NAME on the API task."
+}
+
+variable "otel_resource_attributes" {
+  type        = string
+  default     = null
+  description = "Optional OTEL_RESOURCE_ATTRIBUTES string on the API task (comma-separated key=value pairs)."
+}
+
 variable "enable_ecs" {
   type    = bool
   default = true

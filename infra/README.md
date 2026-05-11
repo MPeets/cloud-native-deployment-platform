@@ -9,7 +9,7 @@ Child modules invoked from the main root ([`modules/`](./modules/)):
 
 - `network`: VPC, subnets, NAT, route tables
 - `alb`: public ALB, target group, and ALB security group. It uses HTTP `:80` when `alb_certificate_arn` is unset, which is the demo default. When `alb_certificate_arn` is set, it adds HTTPS `:443` and redirects HTTP to HTTPS on 80.
-- `ecs_cluster`: ECS tasks and VPC-endpoint security groups, interface VPC endpoints (`ecr.api`, `ecr.dkr`, `logs`), S3 gateway endpoint, ECS cluster, CloudWatch log group, and task execution role. The managed `DATABASE_URL` read policy is attached in the root to avoid RDS/ECS ordering cycles.
+- `ecs_cluster`: ECS tasks and VPC-endpoint security groups, interface VPC endpoints (`ecr.api`, `ecr.dkr`, `logs`), S3 gateway endpoint, ECS cluster, CloudWatch log group, and task execution role. The root attaches a `GetSecretValue` policy on the execution role for database and optional OTLP header secrets (see `ecs.tf`).
 - `rds`: PostgreSQL RDS, with a `DATABASE_URL` secret when managed in-cluster.
 - `ecs_service`: Fargate task definition and ECS service. The API uses `load_balancer`; the worker skips it.
 
@@ -46,6 +46,7 @@ Then edit `terraform.tfvars` and set:
 - `enable_github_incident_logs_reader_role`: leave `true` to create the read-only CloudWatch role for incident reports; set `false` if you do not want that role
 - `github_actions_oidc_repository`: defaults to this template's repo slug; change it when you fork so OIDC `sub` claims match your `owner/name` on GitHub
 - `alb_certificate_arn`: optional. When set, the ALB adds TLS on 443 and redirects HTTP to HTTPS. The ARN must be a validated ACM certificate in the ALB's AWS region. Issuing one is typically `aws_acm_certificate` plus DNS validation, often Route 53. Leave unset for HTTP-only.
+- **OpenTelemetry (Grafana Cloud):** optional. Set `otel_exporter_otlp_endpoint` (e.g. `https://otlp-gateway-prod-eu-north-0.grafana.net/otlp`) and `otel_exporter_otlp_headers_secret_arn` to the ARN of a Secrets Manager secret whose **plaintext** is exactly the `OTEL_EXPORTER_OTLP_HEADERS` value Grafana gives you (`Authorization=Basic%20...`). The API ECS task then gets non-secret OTLP env vars from Terraform and the header from Secrets Manager. Optional: `otel_exporter_otlp_protocol`, `otel_service_name`, `otel_resource_attributes`. The worker task is unchanged. Outbound HTTPS uses the NAT gateway (private tasks).
 
 Image pins are intentionally not stored in tracked `tfvars` files. For local plans/applies, export immutable image refs in the shell:
 
