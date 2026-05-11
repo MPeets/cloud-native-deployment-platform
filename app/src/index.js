@@ -1,6 +1,7 @@
 const { createApp } = require('./app');
 const { createDeploymentsRepository } = require('./deploymentsRepository');
 const { checkConnection, isDatabaseReady, pool } = require('./db');
+const logger = require('./logger');
 
 const port = process.env.PORT || 3000;
 
@@ -11,15 +12,15 @@ async function startServer() {
   });
 
   app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+    logger.info({ port }, 'server listening');
   });
 
   checkConnection().catch((error) => {
-    console.error('Database connection check failed', error);
+    logger.error({ err: error }, 'database connection check failed');
   });
 }
 
 startServer().catch((error) => {
-  console.error('Failed to start server', error);
+  logger.error({ err: error }, 'failed to start server');
   process.exit(1);
 });
