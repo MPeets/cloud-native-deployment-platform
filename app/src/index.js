@@ -1,3 +1,5 @@
+require('./tracing');
+
 const { createApp } = require('./app');
 const { createDeploymentsRepository } = require('./deploymentsRepository');
 const { checkConnection, isDatabaseReady, pool } = require('./db');
