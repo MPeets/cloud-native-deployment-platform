@@ -122,18 +122,20 @@ Alarms exist when ECS and/or RDS are enabled (see `infra/cloudwatch_alarm_*.tf` 
 
 ## Deployments
 
-- **Typical path:** push to **`main`** → **CI** builds and pushes **`devops-api:<git-sha>`** and **`devops-worker:<git-sha>`** → **Deploy** workflow runs **`terraform apply`** with those immutable tags (not `:latest`).
+- **Typical path:** push to **`main`** → **CI** builds and pushes **`devops-api`**, **`devops-worker`**, and **`devops-migrate`** tags **`:<git-sha>`** → **Deploy** workflow runs **`terraform apply`** with those immutable pins (not `:latest`).
 - **Infra / variables:** `terraform init -backend-config=envs/<env>/backend.hcl` then `plan` / `apply` with `envs/<env>/terraform.tfvars` from `infra/`. Match **`<env>`** to **`TF_INFRA_ENVIRONMENT`** in CI when comparing behavior.
 
-**Rollback (application):** Re-deploy a **known-good commit** so CI produces images tagged with that SHA and the deploy job applies them, or temporarily pin **`TF_VAR_docker_image` / `TF_VAR_worker_image`** to specific tags in your automation if you document that as an allowed break-glass step.
+**Rollback (application):** Re-deploy a **known-good commit** so CI produces images tagged with that SHA and the deploy job applies them, or temporarily pin **`TF_VAR_docker_image` / `TF_VAR_worker_image` / `TF_VAR_migrate_image`** to specific tags in your automation if you document that as an allowed break-glass step.
 
 ---
 
 ## Database migrations
 
-Migrations live in **`migrations/`** and are applied by **`scripts/run_migrations.py`** (see [`scripts/README.md`](../scripts/README.md)). **Docker Compose** runs a one-off **migrate** service before API and worker.
+- **ECS (default):** Each API and worker task runs a **`migrate`** init container first (`devops-migrate:<git-sha>` from CI). It uses the same **`DATABASE_URL`** secret as the main container and executes `scripts/run_migrations.py` (with a Postgres advisory lock so concurrent task starts do not race). Terraform toggles: **`ecs_run_db_migrations`** (default `true`) and **`migrate_image`** (defaults from `docker_image` by swapping `devops-api` → `devops-migrate`).
+- **Docker Compose:** **`docker/`** runs a one-off **migrate** service before API and worker. See [`docker/README.md`](../docker/README.md).
+- **Script:** Migrations live in **`migrations/`** and are applied by **`scripts/run_migrations.py`** (see [`scripts/README.md`](../scripts/README.md)).
 
-For AWS, decide explicitly how you run migrations in your own process (e.g. one-off Fargate task, pipeline step with `DATABASE_URL`, or manual)—this repo demonstrates the script and local/CI usage; it does not enforce a single production hook.
+If you disable ECS init migrations (`ecs_run_db_migrations = false`), run the script yourself (e.g. bastion or pipeline) with **`DATABASE_URL`** from Secrets Manager.
 
 ---
 

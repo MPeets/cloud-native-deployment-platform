@@ -6,6 +6,9 @@ on:
     paths:
       - "app/**"
       - "worker/**"
+      - "migrate/**"
+      - "migrations/**"
+      - "scripts/run_migrations.py"
   workflow_dispatch:
 
 concurrency:
@@ -78,6 +81,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build and push migrate image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: migrate/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/devops-migrate:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Publish image summary
         run: |
           {
@@ -86,6 +100,7 @@ jobs:
             echo "- Image SHA: \`${GITHUB_SHA}\`"
             echo "- API: \`${DOCKERHUB_USERNAME}/devops-api:${GITHUB_SHA}\`"
             echo "- Worker: \`${DOCKERHUB_USERNAME}/devops-worker:${GITHUB_SHA}\`"
+            echo "- Migrate: \`${DOCKERHUB_USERNAME}/devops-migrate:${GITHUB_SHA}\`"
             echo ""
             echo "Use this Image SHA as the Terraform \`image_sha\` input for rollback or preview deployments."
           } >> "$GITHUB_STEP_SUMMARY"

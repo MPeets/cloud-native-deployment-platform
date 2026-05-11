@@ -12,6 +12,8 @@ from pathlib import Path
 import psycopg2
 
 _MIGRATION_FILE = re.compile(r"^(\d+)_.+\.sql$")
+# Serialize concurrent migrators (e.g. multiple ECS tasks starting together).
+MIGRATION_ADVISORY_LOCK_KEY = 884_422_001
 
 
 def _default_database_url() -> str:
@@ -81,7 +83,13 @@ def run_migrations(database_url: str, migrations_dir: Path) -> int:
         print(f"could not connect: {exc}", file=sys.stderr)
         return 1
 
+    locked = False
     try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_ADVISORY_LOCK_KEY,))
+        locked = True
+
         conn.autocommit = False
         _ensure_schema_migrations_table(conn)
         conn.commit()
@@ -98,7 +106,19 @@ def run_migrations(database_url: str, migrations_dir: Path) -> int:
                 print(f"failed {path.name}: {exc}", file=sys.stderr)
                 return 1
     finally:
-        conn.close()
+        if conn is not None:
+            try:
+                if locked:
+                    conn.rollback()
+                    conn.autocommit = True
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT pg_advisory_unlock(%s)",
+                            (MIGRATION_ADVISORY_LOCK_KEY,),
+                        )
+            except psycopg2.Error:
+                pass
+            conn.close()
 
     return 0
 

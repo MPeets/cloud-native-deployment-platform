@@ -24,6 +24,7 @@ jobs:
       # Immutable tags: same commit SHA as CI build/push that triggered this run (not :latest).
       TF_VAR_docker_image: "${{ secrets.DOCKERHUB_USERNAME }}/devops-api:${{ github.event.workflow_run.head_sha }}"
       TF_VAR_worker_image: "${{ secrets.DOCKERHUB_USERNAME }}/devops-worker:${{ github.event.workflow_run.head_sha }}"
+      TF_VAR_migrate_image: "${{ secrets.DOCKERHUB_USERNAME }}/devops-migrate:${{ github.event.workflow_run.head_sha }}"
       TF_VAR_database_url_secret_arn: ${{ secrets.TF_DATABASE_URL_SECRET_ARN }}
       TF_VAR_aws_region: ${{ vars.TF_AWS_REGION }}
       TF_VAR_enable_ecs: ${{ vars.TF_ENABLE_ECS }}

@@ -20,6 +20,18 @@ variable "worker_image" {
   description = "Container image for the ECS background worker. Defaults to docker_image with devops-api replaced by devops-worker."
 }
 
+variable "migrate_image" {
+  type        = string
+  default     = null
+  description = "SQL migration sidecar image (runs before API/worker). Defaults to docker_image with devops-api replaced by devops-migrate."
+}
+
+variable "ecs_run_db_migrations" {
+  type        = bool
+  default     = true
+  description = "When true and DATABASE_URL comes from Secrets Manager, API and worker tasks run a migrate init container before the main container."
+}
+
 variable "database_url_secret_arn" {
   type        = string
   default     = null

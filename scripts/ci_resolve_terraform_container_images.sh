@@ -42,10 +42,12 @@ fi
 
 IMG_API="${DOCKERHUB_USERNAME}/devops-api:${SHA}"
 IMG_WKR="${DOCKERHUB_USERNAME}/devops-worker:${SHA}"
+IMG_MIGRATE="${DOCKERHUB_USERNAME}/devops-migrate:${SHA}"
 
 {
   echo "TF_VAR_docker_image=${IMG_API}"
   echo "TF_VAR_worker_image=${IMG_WKR}"
+  echo "TF_VAR_migrate_image=${IMG_MIGRATE}"
 } >>"${GITHUB_ENV}"
 
 # Duplicate pins as step outputs so workflows can pass them via explicit `env:` on Terraform steps.
@@ -55,6 +57,7 @@ if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
     echo "image_sha=${SHA}"
     echo "docker_image=${IMG_API}"
     echo "worker_image=${IMG_WKR}"
+    echo "migrate_image=${IMG_MIGRATE}"
   } >>"${GITHUB_OUTPUT}"
 fi
 

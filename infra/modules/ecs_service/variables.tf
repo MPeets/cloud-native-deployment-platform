@@ -121,3 +121,17 @@ variable "resource_name_tag" {
   type        = string
   description = "AWS Name tag applied to aws_ecs_service.this."
 }
+
+variable "migration_init" {
+  type = object({
+    image             = string
+    container_name    = optional(string, "migrate")
+    log_stream_prefix = optional(string)
+    environment = optional(list(object({
+      name  = string
+      value = string
+    })), [])
+  })
+  default     = null
+  description = "When set, a non-essential init container runs first (SQL migrations); primary container starts after SUCCESS."
+}

@@ -37,6 +37,7 @@ jobs:
         env:
           TF_VAR_docker_image: ${{ steps.resolve_images.outputs.docker_image }}
           TF_VAR_worker_image: ${{ steps.resolve_images.outputs.worker_image }}
+          TF_VAR_migrate_image: ${{ steps.resolve_images.outputs.migrate_image }}
         run: bash "${GITHUB_WORKSPACE}/scripts/ci_require_immutable_container_tags.sh"
 
       - name: Configure AWS credentials (OIDC)
@@ -66,6 +67,7 @@ jobs:
         env:
           TF_VAR_docker_image: ${{ steps.resolve_images.outputs.docker_image }}
           TF_VAR_worker_image: ${{ steps.resolve_images.outputs.worker_image }}
+          TF_VAR_migrate_image: ${{ steps.resolve_images.outputs.migrate_image }}
         run: |
           ENV_NAME="${TF_INFRA_ENVIRONMENT:-dev}"
           export TF_CLI_ARGS_plan="-var-file=envs/${ENV_NAME}/terraform.tfvars"

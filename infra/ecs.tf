@@ -9,7 +9,26 @@ locals {
       valueFrom = local.database_url_secret_arn
     }
   ] : []
-  worker_image = var.worker_image != null && var.worker_image != "" ? var.worker_image : replace(var.docker_image, "/devops-api:", "/devops-worker:")
+  worker_image  = var.worker_image != null && var.worker_image != "" ? var.worker_image : replace(var.docker_image, "/devops-api:", "/devops-worker:")
+  migrate_image = var.migrate_image != null && trimspace(var.migrate_image) != "" ? trimspace(var.migrate_image) : replace(var.docker_image, "/devops-api:", "/devops-migrate:")
+
+  ecs_migrate_base = {
+    image          = local.migrate_image
+    container_name = "migrate"
+    environment    = []
+  }
+
+  ecs_db_migration_init_api = (
+    var.enable_ecs && local.use_database_url_secret && var.ecs_run_db_migrations ? merge(local.ecs_migrate_base, {
+      log_stream_prefix = "api-migrate"
+    }) : null
+  )
+
+  ecs_db_migration_init_worker = (
+    var.enable_ecs && local.use_database_url_secret && var.ecs_run_db_migrations ? merge(local.ecs_migrate_base, {
+      log_stream_prefix = "worker-migrate"
+    }) : null
+  )
 
   otel_headers_secret_arn = var.otel_exporter_otlp_headers_secret_arn != null ? trimspace(var.otel_exporter_otlp_headers_secret_arn) : ""
   otel_otlp_endpoint      = var.otel_exporter_otlp_endpoint != null ? trimspace(var.otel_exporter_otlp_endpoint) : ""
@@ -130,6 +149,8 @@ module "ecs_service_api" {
     container_port                    = var.app_port
     health_check_grace_period_seconds = var.ecs_health_check_grace_period_seconds
   }
+
+  migration_init = local.ecs_db_migration_init_api
 }
 
 module "ecs_service_worker" {
@@ -157,4 +178,6 @@ module "ecs_service_worker" {
   port_mappings        = []
 
   resource_name_tag = "${local.name_prefix}-worker-service"
+
+  migration_init = local.ecs_db_migration_init_worker
 }

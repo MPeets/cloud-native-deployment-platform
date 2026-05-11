@@ -28,7 +28,7 @@ Why it matters: drift means live cloud state no longer matches what Terraform ex
 
 ## `run_migrations.py`
 
-What it does: connects to PostgreSQL using `DATABASE_URL`, or a sensible local default, ensures a `schema_migrations` bookkeeping table exists, then applies every file in the migrations directory matching `NN_description.sql` in numeric order. Versions already recorded are skipped. Each migration runs in a transaction; failures roll back and the script exits non-zero.
+What it does: connects to PostgreSQL using `DATABASE_URL`, or a sensible local default, ensures a `schema_migrations` bookkeeping table exists, then applies every file in the migrations directory matching `NN_description.sql` in numeric order. Versions already recorded are skipped. Each migration runs in a transaction; failures roll back and the script exits non-zero. **Concurrent runs** (for example multiple ECS tasks) serialize on a **Postgres advisory lock** so only one runner applies pending migrations at a time.
 
 Why it matters: application schema must stay in sync with the running API and worker. Ordered, tracked migrations give repeatable database setup in dev, CI, and Compose. [`docker/docker-compose.yml`](../docker/docker-compose.yml) mounts this script and the [`../migrations/`](../migrations/) folder so the `migrate` service finishes before `api` and `worker` start. CI runs the same script to verify migration behavior.
 

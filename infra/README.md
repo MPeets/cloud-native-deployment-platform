@@ -11,7 +11,7 @@ Child modules invoked from the main root ([`modules/`](./modules/)):
 - `alb`: public ALB, target group, and ALB security group. It uses HTTP `:80` when `alb_certificate_arn` is unset, which is the demo default. When `alb_certificate_arn` is set, it adds HTTPS `:443` and redirects HTTP to HTTPS on 80.
 - `ecs_cluster`: ECS tasks and VPC-endpoint security groups, interface VPC endpoints (`ecr.api`, `ecr.dkr`, `logs`), S3 gateway endpoint, ECS cluster, CloudWatch log group, and task execution role. The root attaches a `GetSecretValue` policy on the execution role for database and optional OTLP header secrets (see `ecs.tf`).
 - `rds`: PostgreSQL RDS, with a `DATABASE_URL` secret when managed in-cluster.
-- `ecs_service`: Fargate task definition and ECS service. The API uses `load_balancer`; the worker skips it.
+- `ecs_service`: Fargate task definition and ECS service. The API uses `load_balancer`; the worker skips it. When `DATABASE_URL` is injected from Secrets Manager and `ecs_run_db_migrations` is true (default), each task runs a **`migrate` init container** (`devops-migrate` image) before the main container; see `migrate_image` / `ecs_run_db_migrations` in `variables.tf`.
 
 Keeping backend bootstrap resources out of the main root avoids Terraform trying to manage the same bucket from the state stored in that bucket.
 
@@ -53,22 +53,27 @@ Image pins are intentionally not stored in tracked `tfvars` files. For local pla
 ```bash
 export TF_VAR_docker_image="YOUR_DOCKERHUB_USER/devops-api:<git-sha>"
 export TF_VAR_worker_image="YOUR_DOCKERHUB_USER/devops-worker:<git-sha>"
+export TF_VAR_migrate_image="YOUR_DOCKERHUB_USER/devops-migrate:<git-sha>"
 ```
+
+When unset, Terraform derives **`migrate_image`** from **`docker_image`** by swapping `devops-api` → **`devops-migrate`** (same tag).
 
 Required values without usable defaults:
 
 - `docker_image`: API container image the ECS API task runs
 - `worker_image`: worker container image the ECS worker task runs; when omitted, Terraform derives the matching `devops-worker` tag from `docker_image`
+- `migrate_image`: SQL migration sidecar; when omitted, Terraform derives **`devops-migrate`** from `docker_image`
 
 ## GitHub Actions deploy image selection
 
-The Terraform workflows resolve ECS image pins at run time and pass them as `TF_VAR_docker_image` and `TF_VAR_worker_image`. The default is still the latest successful `CI - Build & Push Docker Images` run on `main`, which keeps the normal mainline deploy path hands-off.
+The Terraform workflows resolve ECS image pins at run time and pass them as `TF_VAR_docker_image`, `TF_VAR_worker_image`, and **`TF_VAR_migrate_image`**. The default is still the latest successful `CI - Build & Push Docker Images` run on `main`, which keeps the normal mainline deploy path hands-off.
 
 For rollback or preview work, run `.github/workflows/ci.yml` for the commit you want to deploy, then copy the full commit SHA from the workflow summary. The Docker tags are immutable and use that SHA:
 
 ```bash
 DOCKERHUB_USERNAME/devops-api:<git-sha>
 DOCKERHUB_USERNAME/devops-worker:<git-sha>
+DOCKERHUB_USERNAME/devops-migrate:<git-sha>
 ```
 
 Manual Terraform runs accept:

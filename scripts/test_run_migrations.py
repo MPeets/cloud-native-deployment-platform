@@ -123,7 +123,7 @@ class RunMigrationsTests(unittest.TestCase):
                     result = run_migrations.run_migrations("postgres://example", migrations_dir)
 
         self.assertEqual(result, 0)
-        self.assertFalse(conn.autocommit)
+        self.assertTrue(conn.autocommit)
         self.assertTrue(conn.closed)
         self.assertEqual(
             conn.inserted_versions,
@@ -145,7 +145,7 @@ class RunMigrationsTests(unittest.TestCase):
                     result = run_migrations.run_migrations("postgres://example", migrations_dir)
 
         self.assertEqual(result, 1)
-        self.assertEqual(conn.rollbacks, 1)
+        self.assertEqual(conn.rollbacks, 2)
         self.assertEqual(conn.inserted_versions, [])
         self.assertTrue(conn.closed)
 

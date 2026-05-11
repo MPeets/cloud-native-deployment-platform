@@ -6,8 +6,9 @@ set -euo pipefail
 _ci_require_pins() {
   local d="${TF_VAR_docker_image:-}"
   local w="${TF_VAR_worker_image:-}"
-  if [[ -z "$d" || -z "$w" ]]; then
-    echo "::error title=Missing image pins::TF_VAR_docker_image and TF_VAR_worker_image must be set in GitHub Actions before Terraform (run scripts/ci_resolve_terraform_container_images.sh, or set both explicitly)." >&2
+  local m="${TF_VAR_migrate_image:-}"
+  if [[ -z "$d" || -z "$w" || -z "$m" ]]; then
+    echo "::error title=Missing image pins::TF_VAR_docker_image, TF_VAR_worker_image, and TF_VAR_migrate_image must be set in GitHub Actions before Terraform (run scripts/ci_resolve_terraform_container_images.sh, or set all three explicitly)." >&2
     exit 1
   fi
 }
@@ -42,5 +43,7 @@ fi
 
 _immutable_latest_check TF_VAR_docker_image "${TF_VAR_docker_image:-}"
 _immutable_latest_check TF_VAR_worker_image "${TF_VAR_worker_image:-}"
+_immutable_latest_check TF_VAR_migrate_image "${TF_VAR_migrate_image:-}"
 _placeholder_check TF_VAR_docker_image "${TF_VAR_docker_image:-}"
 _placeholder_check TF_VAR_worker_image "${TF_VAR_worker_image:-}"
+_placeholder_check TF_VAR_migrate_image "${TF_VAR_migrate_image:-}"
