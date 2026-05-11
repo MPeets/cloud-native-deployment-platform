@@ -61,6 +61,17 @@ function createTestApp({ ready = true } = {}) {
   });
 }
 
+test('GET /metrics exposes Prometheus metrics', async () => {
+  const app = createTestApp();
+
+  const response = await request(app).get('/metrics').expect(200);
+
+  assert.match(response.headers['content-type'], /^text\/plain/);
+  assert.match(response.text, /http_requests_total/);
+  assert.match(response.text, /http_request_duration_seconds/);
+  assert.match(response.text, /http_requests_in_flight/);
+});
+
 test('health and readiness endpoints report process and database status', async () => {
   const healthyApp = createTestApp();
   const unhealthyApp = createTestApp({ ready: false });
