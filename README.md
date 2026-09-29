@@ -4,6 +4,14 @@ An end-to-end DevOps sample: a small HTTP API and background worker backed by Po
 
 This file is the map of the repo. For depth, follow the links below.
 
+## What this demonstrates
+
+- **Infrastructure as code:** modular Terraform for VPC, ALB, ECS Fargate, RDS and Secrets Manager, with module tests plus fmt, validate, tflint and tfsec on every change
+- **Secure CI/CD:** GitHub Actions deploying through OIDC (no long-lived AWS keys), separate plan/apply/destroy workflows with approval gates, and SHA-based rollback
+- **Observability:** CloudWatch alarms routed to SNS, plus optional OpenTelemetry traces to Grafana
+- **Operational tooling:** Python scripts for scheduled drift reports, post-deploy health checks and incident log summaries, backed by a runbook
+- **Tested end to end:** API contract tests, worker state-machine tests, and real Postgres migration replays in CI
+
 ## Operational automation
 
 This project is more than an ECS deployment demo. It includes operator-facing automation for drift checks and incident evidence collection.
