@@ -1,0 +1,6 @@
+apiVersion: v2
+name: deployment-platform
+description: Helm chart for the deployment platform API, worker, and migration runner
+type: application
+version: 0.1.0
+appVersion: "latest"

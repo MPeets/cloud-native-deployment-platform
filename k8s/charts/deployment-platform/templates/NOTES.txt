@@ -1,0 +1,6 @@
+Deployment platform release {{ include "dp.fullname" . }} is installed in namespace {{ .Release.Namespace }}.
+
+This chart revision defines shared names and labels only. DATABASE_URL is not created here.
+It is read from Secret {{ .Values.database.existingSecret }} key DATABASE_URL, which must already exist:
+
+  kubectl get secret {{ .Values.database.existingSecret }} --namespace {{ .Release.Namespace }}

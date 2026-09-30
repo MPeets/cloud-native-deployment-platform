@@ -1,0 +1,13 @@
+fullnameOverride: ""
+
+image:
+  # Docker Hub namespace. Images are <owner>/devops-api, <owner>/devops-worker, and <owner>/devops-migrate.
+  owner: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+podAnnotations: {}
+
+database:
+  # Secret created outside this chart. Must contain key DATABASE_URL.
+  existingSecret: dp-db
