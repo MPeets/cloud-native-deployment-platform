@@ -7,9 +7,10 @@ RUN apk add --no-cache curl \
   && curl -fsSL -o /etc/ssl/certs/rds-global-bundle.pem \
   https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 
-COPY package*.json ./
+COPY --chown=node:node package*.json ./
 RUN npm ci --omit=dev
 
-COPY src ./src
+COPY --chown=node:node src ./src
 
+USER node
 CMD ["node", "src/worker.js"]
