@@ -11,3 +11,13 @@ podAnnotations: {}
 database:
   # Secret created outside this chart. Must contain key DATABASE_URL.
   existingSecret: dp-db
+
+api:
+  port: 3000
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
