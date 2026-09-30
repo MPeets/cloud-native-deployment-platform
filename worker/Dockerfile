@@ -12,4 +12,4 @@ RUN npm ci --only=production
 
 COPY src ./src
 
-CMD ["npm", "start"]
+CMD ["node", "src/worker.js"]
