@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /worker
 
@@ -8,7 +8,7 @@ RUN apk add --no-cache curl \
   https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 COPY src ./src
 
