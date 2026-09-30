@@ -1,5 +1,7 @@
 'use strict';
 
+let sdk;
+
 function tracingEnabled() {
   if (process.env.OTEL_SDK_DISABLED === 'true') {
     return false;
@@ -23,7 +25,7 @@ function startTracing() {
   const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
   const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
 
-  const sdk = new NodeSDK({
+  sdk = new NodeSDK({
     traceExporter: new OTLPTraceExporter(),
     instrumentations: [
       getNodeAutoInstrumentations({
@@ -33,16 +35,16 @@ function startTracing() {
   });
 
   sdk.start();
+}
 
-  const shutdown = () => {
-    sdk
-      .shutdown()
-      .catch(() => {})
-      .finally(() => process.exit(0));
-  };
+async function shutdownTracing() {
+  if (!tracingEnabled() || !sdk) {
+    return;
+  }
 
-  process.once('SIGTERM', shutdown);
-  process.once('SIGINT', shutdown);
+  await sdk.shutdown().catch(() => {});
 }
 
 startTracing();
+
+module.exports = { shutdownTracing };
