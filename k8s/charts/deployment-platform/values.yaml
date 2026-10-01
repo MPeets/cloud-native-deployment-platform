@@ -46,3 +46,10 @@ worker:
       memory: 64Mi
     limits:
       memory: 256Mi
+
+ingress:
+  enabled: false
+  className: ""
+  host: api.local
+  annotations: {}
+  tls: []
