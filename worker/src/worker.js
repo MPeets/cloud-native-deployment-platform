@@ -155,10 +155,17 @@ function createDeploymentWorker({
   };
 }
 
+function attachIdleClientErrorHandler(pool, logger = defaultLogger) {
+  pool.on('error', (error) => {
+    logger.error({ err: error }, 'idle database client error');
+  });
+}
+
 async function main() {
   const { Pool } = require('pg');
   const { poolOptions } = require('./rdsSsl');
   const pool = new Pool(poolOptions(DEFAULT_DATABASE_URL));
+  attachIdleClientErrorHandler(pool);
   const repository = createWorkerRepository(pool);
   const worker = createDeploymentWorker({ repository, logger: defaultLogger });
 
@@ -186,6 +193,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  attachIdleClientErrorHandler,
   createDeploymentWorker,
   createWorkerRepository,
   processPendingDeployments,
