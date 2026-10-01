@@ -12,6 +12,10 @@ database:
   # Secret created outside this chart. Must contain key DATABASE_URL.
   existingSecret: dp-db
 
+migrations:
+  # Pre-install/pre-upgrade hook. The Secret above must already exist: hooks run before chart resources are created.
+  enabled: true
+
 api:
   port: 3000
   replicaCount: 2
