@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
+const { EventEmitter } = require('node:events');
 const test = require('node:test');
-const { processPendingDeployments, waitForRepository } = require('../src/worker');
+const { attachIdleClientErrorHandler, processPendingDeployments, waitForRepository } = require('../src/worker');
 
 const logger = {
   info() {},
@@ -115,6 +116,35 @@ test('worker passes the configured processing delay to sleep', async () => {
   });
 
   assert.deepEqual(sleepDurations, [1234]);
+});
+
+test('idle database client errors are logged and do not exit the process', () => {
+  const logged = [];
+  const pool = new EventEmitter();
+  const originalExit = process.exit;
+  let exited = false;
+
+  process.exit = () => {
+    exited = true;
+  };
+
+  try {
+    attachIdleClientErrorHandler(pool, {
+      error(obj, message) {
+        logged.push({ obj, message });
+      },
+    });
+
+    const error = new Error('connection terminated unexpectedly');
+    pool.emit('error', error);
+
+    assert.equal(exited, false);
+    assert.equal(logged.length, 1);
+    assert.equal(logged[0].message, 'idle database client error');
+    assert.equal(logged[0].obj.err, error);
+  } finally {
+    process.exit = originalExit;
+  }
 });
 
 test('waitForRepository retries initialization until the repository is ready', async () => {
