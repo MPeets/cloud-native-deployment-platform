@@ -21,3 +21,16 @@ api:
       memory: 64Mi
     limits:
       memory: 256Mi
+
+worker:
+  replicaCount: 1
+  env:
+    WORKER_POLL_INTERVAL_MS: "5000"
+    WORKER_PROCESSING_MS: "3000"
+    WORKER_FAILURE_RATE: "0.1"
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
