@@ -1,6 +1,17 @@
-Deployment platform release {{ include "dp.fullname" . }} is installed in namespace {{ .Release.Namespace }}.
+Release {{ .Release.Name }} is installed in namespace {{ .Release.Namespace }}.
 
-This chart revision defines shared names and labels only. DATABASE_URL is not created here.
-It is read from Secret {{ .Values.database.existingSecret }} key DATABASE_URL, which must already exist:
+DATABASE_URL comes from Secret {{ .Values.database.existingSecret }} (key DATABASE_URL). That Secret must exist before install.
 
-  kubectl get secret {{ .Values.database.existingSecret }} --namespace {{ .Release.Namespace }}
+Check status:
+
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }} --namespace {{ .Release.Namespace }}
+{{- if .Values.ingress.enabled }}
+
+Reach the API at {{ .Values.ingress.host }}.
+{{- else }}
+
+Reach the API:
+
+  kubectl port-forward svc/{{ printf "%s-api" (include "dp.fullname" .) | trunc 63 | trimSuffix "-" }} 8080:80 --namespace {{ .Release.Namespace }}
+  curl localhost:8080/ready
+{{- end }}
