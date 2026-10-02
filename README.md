@@ -132,9 +132,10 @@ These choices are not automatic wins. They are the tradeoffs this sample makes.
 | [`worker/`](worker/) | Polls DB and moves deployments from pending through running to succeeded or failed. | [`worker/README.md`](worker/README.md) |
 | [`migrations/`](migrations/) | Numbered SQL migrations. | Applied via [`scripts/run_migrations.py`](scripts/run_migrations.py); see [`scripts/README.md`](scripts/README.md) and [`docker/README.md`](docker/README.md). |
 | [`docker/`](docker/) | Docker Compose: Postgres, migrations, API, worker. | [`docker/README.md`](docker/README.md) |
+| [`k8s/`](k8s/) | Helm chart: API, worker, and a migration Job. Kind config is in `k8s/ci/`. | [`k8s/README.md`](k8s/README.md) |
 | [`infra/`](infra/) | Terraform: VPC, ECS Fargate, ALB, OIDC-friendly IAM, CloudWatch alarms, and SNS for ops. | [`infra/README.md`](infra/README.md) |
 | [`scripts/`](scripts/) | Python helpers: drift report, migrations runner, deploy health check, incident log pull. | [`scripts/README.md`](scripts/README.md) |
-| [`.github/workflows/`](.github/workflows/) | CI/CD: image build, Terraform plan/apply/destroy, drift report, script lint, incident reports, and related automation. | Open the YAML files for triggers and inputs. |
+| [`.github/workflows/`](.github/workflows/) | CI/CD: image build, Kubernetes chart lint and kind smoke, Terraform plan/apply/destroy, drift report, script lint, incident reports, and related automation. | Open the YAML files for triggers and inputs. |
 
 ## End-to-end flow (high level)
 
@@ -173,4 +174,5 @@ The IAM trust policy for `AWS_ROLE_TO_ASSUME` must allow `token.actions.githubus
 - Operations runbook: [`docs/RUNBOOK.md`](docs/RUNBOOK.md)
 - Bootstrap and drift: [`infra/README.md`](infra/README.md)
 - Local full stack: [`docker/README.md`](docker/README.md)
+- Kubernetes chart and kind: [`k8s/README.md`](k8s/README.md)
 - Operator and automation scripts: [`scripts/README.md`](scripts/README.md)
