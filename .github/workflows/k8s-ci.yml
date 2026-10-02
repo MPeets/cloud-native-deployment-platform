@@ -161,6 +161,23 @@ jobs:
           echo "deployment ${id} did not succeed after 30 attempts (last status: ${status})" >&2
           exit 1
 
+      - name: Upgrade chart and recheck health
+        run: |
+          helm upgrade dp k8s/charts/deployment-platform \
+            --namespace "$NS" \
+            --values k8s/ci/values-kind.yaml \
+            --set "image.tag=${TAG}" \
+            --set-string "podAnnotations.rollme=${{ github.run_id }}" \
+            --wait \
+            --timeout 5m
+          kubectl port-forward -n "$NS" svc/dp-api 8080:80 &
+          for _ in $(seq 1 30); do
+            curl -fsS -o /dev/null http://localhost:8080/health && break
+            sleep 1
+          done
+          python scripts/health_check.py --alb-dns localhost:8080 --retries 5 --skip-aws
+          helm history dp --namespace "$NS"
+
       - name: Collect failure diagnostics
         if: failure()
         run: |
