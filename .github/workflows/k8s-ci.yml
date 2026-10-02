@@ -160,3 +160,16 @@ jobs:
           done
           echo "deployment ${id} did not succeed after 30 attempts (last status: ${status})" >&2
           exit 1
+
+      - name: Collect failure diagnostics
+        if: failure()
+        run: |
+          kubectl get all -n "$NS" || true
+          kubectl get events -n "$NS" --sort-by=.lastTimestamp || true
+          kubectl describe pods -n "$NS" || true
+          kubectl logs -n "$NS" -l app.kubernetes.io/instance=dp --all-containers --tail=200 || true
+          if kubectl get job/dp-migrate -n "$NS" >/dev/null 2>&1; then
+            kubectl logs -n "$NS" job/dp-migrate --all-containers --tail=200 || true
+          else
+            echo "migrate job not found"
+          fi
