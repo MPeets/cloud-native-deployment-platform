@@ -123,3 +123,40 @@ jobs:
             sleep 1
           done
           python scripts/health_check.py --alb-dns localhost:8080 --retries 5 --skip-aws
+
+      - name: Smoke deployment through the worker
+        run: |
+          kubectl port-forward -n "$NS" svc/dp-api 8080:80 &
+          for _ in $(seq 1 30); do
+            curl -fsS -o /dev/null http://localhost:8080/health && break
+            sleep 1
+          done
+          id=$(curl -fsS -X POST http://localhost:8080/deployments \
+            -H 'Content-Type: application/json' \
+            -d "{\"service\":\"smoke\",\"version\":\"${TAG}\"}" | jq -r '.id')
+          if [[ -z "$id" || "$id" == "null" ]]; then
+            echo "POST /deployments did not return an id" >&2
+            exit 1
+          fi
+          echo "created deployment id=${id}"
+          status=""
+          for attempt in $(seq 1 30); do
+            status=$(curl -fsS "http://localhost:8080/deployments/${id}" | jq -r '.status')
+            echo "attempt ${attempt}: status=${status}"
+            if [[ "$status" == "succeeded" ]]; then
+              exit 0
+            fi
+            if [[ "$status" == "failed" ]]; then
+              echo "deployment ${id} failed" >&2
+              exit 1
+            fi
+            if [[ "$status" != "pending" && "$status" != "running" ]]; then
+              echo "deployment ${id} returned unexpected status: ${status}" >&2
+              exit 1
+            fi
+            if [[ "$attempt" -lt 30 ]]; then
+              sleep 2
+            fi
+          done
+          echo "deployment ${id} did not succeed after 30 attempts (last status: ${status})" >&2
+          exit 1
