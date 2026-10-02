@@ -49,3 +49,77 @@ jobs:
             --set image.owner=local \
             --set image.tag=${{ github.sha }} \
             | docker run --rm -i ghcr.io/yannh/kubeconform -strict -summary
+
+  kind-smoke:
+    needs: chart-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NS: dp
+      TAG: ${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build images
+        run: |
+          docker build -t "local/devops-api:${TAG}" ./app
+          docker build -t "local/devops-worker:${TAG}" ./worker
+          docker build -t "local/devops-migrate:${TAG}" -f migrate/Dockerfile .
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: dp
+
+      - name: Load images into kind
+        run: |
+          kind load docker-image "local/devops-api:${TAG}" --name dp
+          kind load docker-image "local/devops-worker:${TAG}" --name dp
+          kind load docker-image "local/devops-migrate:${TAG}" --name dp
+
+      - name: Install metrics-server
+        run: |
+          kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+          kubectl patch deployment metrics-server -n kube-system --type=json \
+            -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+
+      - name: Install Postgres
+        run: |
+          kubectl create namespace "$NS"
+          kubectl apply -n "$NS" -f k8s/ci/postgres.yaml
+          kubectl rollout status deployment/postgres -n "$NS" --timeout=3m
+
+      - name: Create database secret
+        run: |
+          kubectl create secret generic dp-db \
+            --namespace "$NS" \
+            --from-literal=DATABASE_URL=postgres://postgres:postgres@postgres:5432/cloud-native-deployment-platform
+
+      - name: Install chart
+        run: |
+          helm upgrade --install dp k8s/charts/deployment-platform \
+            --namespace "$NS" \
+            --values k8s/ci/values-kind.yaml \
+            --set "image.tag=${TAG}" \
+            --wait \
+            --timeout 5m
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+
+      - name: Install health check dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Port-forward API and run health check
+        run: |
+          kubectl port-forward -n "$NS" svc/dp-api 8080:80 &
+          for _ in $(seq 1 30); do
+            curl -fsS -o /dev/null http://localhost:8080/health && break
+            sleep 1
+          done
+          python scripts/health_check.py --alb-dns localhost:8080 --retries 5 --skip-aws
