@@ -1,0 +1,14 @@
+fullnameOverride: dp
+
+image:
+  owner: local
+
+api:
+  replicaCount: 1
+  autoscaling:
+    minReplicas: 1
+
+worker:
+  env:
+    WORKER_PROCESSING_MS: "500"
+    WORKER_FAILURE_RATE: "0"
